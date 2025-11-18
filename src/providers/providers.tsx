@@ -3,7 +3,8 @@
 import { PrivyProvider } from "@privy-io/react-auth";
 import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import { arbitrum, base, polygon } from "viem/chains";
-// import { ThemeProvider } from "./theme-provider";
+import { ThemeProvider } from "./theme-provider";
+import { Toaster } from "@/components/ui/sonner"
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -29,15 +30,16 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         solanaClusters: [{name: 'mainnet-beta', rpcUrl: 'https://api.mainnet-beta.solana.com'}],
       }}
     >
-      {/* <ThemeProvider
+      <ThemeProvider
             attribute="class"
             defaultTheme="system"
             enableSystem
             disableTransitionOnChange
-          > */}
+          >
 
         {children}
-      {/* </ThemeProvider> */}
+        <Toaster />
+      </ThemeProvider>
     </PrivyProvider>
   );
 }
