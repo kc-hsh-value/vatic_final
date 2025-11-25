@@ -43,7 +43,6 @@ const xfer = (to: string, value: bigint) =>
 async function sendWithRetry<T>(fn: () => Promise<T>, label: string, max = 3) {
   let attempt = 0;
   const waits = [600, 1200, 2000];
-  // @ts-ignore
   while (true) {
     try {
       return await fn();

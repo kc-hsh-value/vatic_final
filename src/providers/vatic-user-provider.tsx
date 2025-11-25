@@ -153,7 +153,7 @@ export default function VaticUserProvider({ children }: PropsWithChildren) {
       setSafeWallet({
         balanceUSDC: usdc,
         lockedUSDC: clob.locked,
-        positionValue: value.totalValue,
+        positionsValue: value.totalValue,
         lastSyncAt: Date.now(),
       })
     } catch (e: any) {

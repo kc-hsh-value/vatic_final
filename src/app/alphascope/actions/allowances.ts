@@ -44,7 +44,6 @@ async function sendWithRetry<T>(fn: () => Promise<T>, label: string, max = 3) {
   let attempt = 0;
   // jittered backoff: 500ms, 1000ms, 2000ms (+/- 200ms)
   const waits = [500, 1000, 2000];
-  // @ts-ignore
   while (true) {
     try {
       return await fn();
