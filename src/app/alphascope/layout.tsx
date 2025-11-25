@@ -11,6 +11,9 @@ import { isEmbeddedEvmWallet } from '@/types/polymarket';
 import { markHasSessionSigner } from './actions/update-flags';
 import { ensureOnchainAndClob } from './actions/ensure-allowances-and-clob-credentials';
 import LoginScreen from './components/login-screen';
+import ReactQueryProvider from '@/providers/query-provider';
+import VaticUserProvider from '@/providers/vatic-user-provider';
+import NewNavbar from './components/new-navbar';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -115,7 +118,7 @@ const Layout = ({ children }: LayoutProps) => {
                 await ensureOnchainAndClob({
                     userId: user.id,
                     walletId: embedded.id,
-                    address: embedded.address as `0x${string}`,
+                    eoaAddress: embedded.address as `0x${string}`,
                     chainId: 137,
                 });
             }
@@ -140,11 +143,41 @@ const Layout = ({ children }: LayoutProps) => {
             <LoginScreen onLoginClick={login} />
         )
     }
-    return (
-        <div>
-            {children}
-        </div>
-    )
+    if(ready && authenticated) {
+        console.log("ready and authenticated")
+        if(profileSetupLoading) {
+
+            console.log("profileSetupLoading")
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+                    <Spinner className="size-8"/>
+                    <p className="text-lg font-medium">Setting up your profile...</p>
+                </div>
+            )
+        }
+        if(!profileSetupLoading) {
+            console.log("not profileSetupLoading")
+            return (    
+            <div>
+                <ReactQueryProvider>
+                    <VaticUserProvider>
+                        <NewNavbar />
+                        <div>
+                            <iframe src="https://ticker.polymarket.com/embed?category=Breaking News&theme=dark&speed=0.5&showPrices=true" width="100%" height="44" style={{border: "none", overflow: "hidden", display: "block"}}></iframe>
+                        </div>
+
+                        {children}
+                    </VaticUserProvider>
+                </ReactQueryProvider>
+            </div>
+        )
+        }
+    }
+    // return (
+    //     <div>
+    //         <p>Vatic Trading</p>
+    //     </div>
+    // )
 }
 
 export default Layout

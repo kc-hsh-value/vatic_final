@@ -9,22 +9,18 @@ import { JsonRpcProvider } from "ethers";
 import { privy } from "@/lib/privy/authorization-privy";
 import { markAllowances } from "./update-flags";
 
-type Input = {
-  userId: string;
-  walletId: string;            // Privy wallet id
-  address: `0x${string}`;
-  chainId: number;             // 137
-};
+// Define a clear input type
+type EnsureInput = { userId: string; walletId: string; eoaAddress: `0x${string}`; chainId: number; };
 
-export async function ensureOnchainAndClob(input: Input) {
-  const { userId, walletId, address, chainId } = input;
+export async function ensureOnchainAndClob(input: EnsureInput) {
+  const { userId, walletId, eoaAddress, chainId } = input;
 
-  // Read current flags & creds
+  // 1. Get the user's complete profile from the DB in one go
   const { data: profile } = await supabase
     .from("profiles")
-    .select("allowances")
+    .select("allowances, safe_wallet_address")
     .eq("id", userId)
-    .maybeSingle();
+    .single();
 
   const { data: existingCreds } = await supabase
     .from("polymarket_api_keys")
@@ -32,20 +28,28 @@ export async function ensureOnchainAndClob(input: Input) {
     .eq("user_id", userId)
     .maybeSingle();
 
-  // 1) Allowances (only if missing)
-  if (!profile?.allowances) {
-    const res = await setPolymarketAllowances({ walletId, owner: address, sponsor:true, address });
-    if (!res?.ok) throw new Error("Failed to set allowances");
+  // 2. Handle Allowances & Safe Wallet
+  if (!profile?.allowances || !profile.safe_wallet_address) {
+    console.log("Profile needs allowances or Safe Wallet setup.");
+    const res = await setPolymarketAllowances({ 
+        userId, 
+        walletId, 
+        eoaAddress,
+        // We pass the potentially null safe_wallet_address. The function will handle it.
+        currentSafeAddress: profile?.safe_wallet_address as `0x${string}` | null 
+    });
+    if (!res?.ok) throw new Error("Failed to set allowances and/or safe wallet.");
     await markAllowances(userId);
   }
 
-  // 2) CLOB creds (only if missing)
+  // 3. Handle CLOB Credentials (for the EOA)
+  // the clob creds need to belong to the EOA, not the Safe because we need to be able to sign orders
   if (!existingCreds) {
     const rpc = process.env.POLYGON_RPC_URL ?? "https://polygon-rpc.com";
     const provider = new JsonRpcProvider(rpc);
 
     // Privy signer → shim for clob client (you already used this pattern)
-    const signer = createEthersSigner({ walletId, address, provider, privyClient: privy as any });
+    const signer = createEthersSigner({ walletId, address: eoaAddress, provider, privyClient: privy as any });
     const shim: any = {
       _signTypedData: (d: any, t: any, v: any) =>
         (signer as any)._signTypedData?.(d, t, v) ?? (signer as any).signTypedData(d, t, v),
@@ -65,7 +69,7 @@ export async function ensureOnchainAndClob(input: Input) {
       key: creds.key,
       secret: creds.secret,
       passphrase: creds.passphrase,
-      address
+      address: eoaAddress,
     });
   }
 
