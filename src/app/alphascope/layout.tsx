@@ -23,115 +23,208 @@ const Layout = ({ children }: LayoutProps) => {
     const {ready, authenticated} = usePrivy()
     const [profileSetupLoading, setProfileSetupLoading] = React.useState(false)
     const {addSessionSigners} = useSessionSigners()
-    const {login} = useLogin({
-        onComplete: async ({ user }) => {
-            try {
-                setProfileSetupLoading(true)
-                const accessToken = await getAccessToken();
-                toast("Event has been created", {
-                    description: "Performing account provisioning...",
-                    action: {
-                        label: "Undo",
-                        onClick: () => console.log("Undo"),
-                    },
-                })
-                if (!accessToken) {
-                    toast("Couldn't find access token")
-                    setProfileSetupLoading(false)
-                    throw new Error("No access token")
-                };
+    // const {login} = useLogin({
+    //     onComplete: async ({ user }) => {
+    //         try {
+    //             setProfileSetupLoading(true)
+    //             const accessToken = await getAccessToken();
+    //             toast("Event has been created", {
+    //                 description: "Performing account provisioning...",
+    //                 action: {
+    //                     label: "Undo",
+    //                     onClick: () => console.log("Undo"),
+    //                 },
+    //             })
+    //             if (!accessToken) {
+    //                 toast("Couldn't find access token")
+    //                 setProfileSetupLoading(false)
+    //                 throw new Error("No access token")
+    //             };
 
-                // 1) What do we already have?
+    //             // 1) What do we already have?
+    //             let status = await getProvisioningStatus(user.id);
+
+    //             // 2) Ensure profile exists
+    //             if (!status.exists) {
+    //                 const created = await createUser(user, accessToken);
+    //                 if (!created?.success) {
+    //                     setProfileSetupLoading(false)
+    //                     toast("failed to create a profile")
+    //                     throw new Error("createUser failed")
+    //                 };
+    //                 toast("successfully created profile")
+    //                 status = await getProvisioningStatus(user.id);
+    //             }
+
+    //             // 3) Ensure session signer (client-side)
+    //             const embedded = user.linkedAccounts.find(isEmbeddedEvmWallet);
+    //             if (!embedded) {
+    //                 setProfileSetupLoading(false)
+    //                 toast("an error with wallet occured please refresh")
+    //                 throw new Error("No embedded EVM wallet")
+    //             }
+                
+    //             toast("almost finished configurating profile")
+    //             // If Privy already marked this wallet as delegated, we’re done for signers
+    //             const alreadyDelegated = (embedded as any).delegated === true;
+    //             if (alreadyDelegated) {
+    //                 if (!status.signers_added) {
+    //                     const res = await markHasSessionSigner(user.id);
+    //                 }
+    //                 status = { ...status, signers_added: true };
+    //             } else if (!status.signers_added) {
+    //                 toast("handling allowances")
+    //                 const quorumId = process.env.NEXT_PUBLIC_PRIVY_SIGNER_ID!;
+    //                 if (!quorumId) throw new Error("Missing NEXT_PUBLIC_PRIVY_SIGNER_ID");
+    //                 toast("step 1/3 complete")
+
+    //                 try {
+    //                     await addSessionSigners({
+    //                         address: embedded.address,
+    //                         signers: [{ signerId: quorumId, policyIds: [] }],
+    //                     });
+    //                     toast("step 2/3 complete")
+    //                     await markHasSessionSigner(user.id);
+    //                     toast("step 3/3 complete")
+    //                     status = { ...status, signers_added: true };
+    //                 } catch (e: any) {
+    //                     setProfileSetupLoading(false)
+    //                     // Idempotency: ignore "already delegated/has signer" errors
+    //                     const msg = String(e?.message || "");
+    //                     const code = e?.response?.status;
+    //                     if (
+    //                         code === 409 ||                          // conflict
+    //                         /already.*(delegated|signer)/i.test(msg) // friendly match
+    //                     ) {
+    //                         await markHasSessionSigner(user.id);
+    //                         status = { ...status, signers_added: true };
+    //                     } else {
+    //                         throw e;
+    //                     }
+    //                 }
+    //             }
+
+
+    //         // 4) - updated. Check for safe_wallet_address
+
+    //         if(!status.hasSafeWallet){
+    //             toast("Safe wallet not found in profile, creating one.")
+                
+    //         }
+
+    //         // 4) Ensure allowances + CLOB creds on server (idempotent)
+    //         if ((!status.hasAllowances || !status.hasClobCreds) && embedded.id) {
+    //             toast("ensuring allowances and clob creds")
+    //             await ensureOnchainAndClob({
+    //                 userId: user.id,
+    //                 walletId: embedded.id,
+    //                 eoaAddress: embedded.address as `0x${string}`,
+    //                 chainId: 137,
+    //             });
+    //         }
+    //         setProfileSetupLoading(false)
+    //         toast("done")
+    //         } catch (err) {
+    //             console.error("Post-login provisioning failed:", err);
+    //             setProfileSetupLoading(false)
+    //         }
+    //     },
+    //     onError: (e) => console.log("Privy login error:", e),
+    // })
+    const { login } = useLogin({
+        onComplete: async ({ user }) => {
+            // A simple helper function for delays
+            const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+            try {
+                setProfileSetupLoading(true);
+                const accessToken = await getAccessToken();
+                if (!accessToken) throw new Error("No access token");
+
+                toast.info("Checking your vatic profile...");
                 let status = await getProvisioningStatus(user.id);
 
-                // 2) Ensure profile exists
+                // 1) Ensure profile exists
                 if (!status.exists) {
+                    toast.info("Creating your profile...");
                     const created = await createUser(user, accessToken);
-                    if (!created?.success) {
-                        setProfileSetupLoading(false)
-                        toast("failed to create a profile")
-                        throw new Error("createUser failed")
-                    };
-                    toast("successfully created profile")
+                    if (!created?.success) throw new Error("Failed to create profile");
                     status = await getProvisioningStatus(user.id);
                 }
 
-                // 3) Ensure session signer (client-side)
+                // 2) Ensure session signer (client-side)
                 const embedded = user.linkedAccounts.find(isEmbeddedEvmWallet);
-                if (!embedded) {
-                    setProfileSetupLoading(false)
-                    toast("an error with wallet occured please refresh")
-                    throw new Error("No embedded EVM wallet")
-                }
-                
-                toast("almost finished configurating profile")
-                // If Privy already marked this wallet as delegated, we’re done for signers
-                const alreadyDelegated = (embedded as any).delegated === true;
-                if (alreadyDelegated) {
-                    if (!status.signers_added) {
-                        const res = await markHasSessionSigner(user.id);
-                    }
-                    status = { ...status, signers_added: true };
-                } else if (!status.signers_added) {
-                    toast("handling allowances")
-                    const quorumId = process.env.NEXT_PUBLIC_PRIVY_SIGNER_ID!;
-                    if (!quorumId) throw new Error("Missing NEXT_PUBLIC_PRIVY_SIGNER_ID");
-                    toast("step 1/3 complete")
+                if (!embedded) throw new Error("No embedded EVM wallet found");
 
+                if (!status.signers_added) {
+                    toast.info("Please approve the request to enable trading...");
+                    const quorumId = process.env.NEXT_PUBLIC_PRIVY_SIGNER_ID!;
                     try {
                         await addSessionSigners({
                             address: embedded.address,
                             signers: [{ signerId: quorumId, policyIds: [] }],
                         });
-                        toast("step 2/3 complete")
                         await markHasSessionSigner(user.id);
-                        toast("step 3/3 complete")
-                        status = { ...status, signers_added: true };
+                        status.signers_added = true;
+                        toast.success("Trading session approved!");
+                        // IMPORTANT: Add a small delay here to allow for propagation
+                        await sleep(2000); // Wait 2 seconds
                     } catch (e: any) {
-                        setProfileSetupLoading(false)
-                        // Idempotency: ignore "already delegated/has signer" errors
+                        // Your existing idempotency check is great
                         const msg = String(e?.message || "");
-                        const code = e?.response?.status;
-                        if (
-                            code === 409 ||                          // conflict
-                            /already.*(delegated|signer)/i.test(msg) // friendly match
-                        ) {
+                        if (/already.*(delegated|signer)/i.test(msg)) {
                             await markHasSessionSigner(user.id);
-                            status = { ...status, signers_added: true };
+                            status.signers_added = true;
                         } else {
-                            throw e;
+                            throw e; // Re-throw other errors
                         }
                     }
                 }
 
+                // 3) Ensure allowances + CLOB creds with a retry loop
+                if (!status.hasAllowances || !status.hasClobCreds) {
+                    toast.info("Setting up your on-chain trading wallet...");
+                    let success = false;
+                    const maxRetries = 3;
+                    for (let i = 1; i <= maxRetries; i++) {
+                        try {
+                            if(!embedded.id) {
+                                throw new Error("No embedded EVM wallet ID found");
+                            }
+                            await ensureOnchainAndClob({
+                                userId: user.id,
+                                walletId: embedded.id,
+                                eoaAddress: embedded.address as `0x${string}`,
+                                chainId: 137,
+                            });
+                            success = true;
+                            break; // Exit the loop on success
+                        } catch (err) {
+                            console.warn(`Attempt ${i} to setup on-chain wallet failed.`, err);
+                            if (i === maxRetries) {
+                            // If it's the last attempt, re-throw the error to be caught below
+                            throw err;
+                            }
+                            // Wait before retrying
+                            await sleep(1500);
+                        }
+                    }
+                }
 
-            // 4) - updated. Check for safe_wallet_address
+                setProfileSetupLoading(false);
+                toast.success("Setup complete! Welcome to vatic.");
 
-            if(!status.hasSafeWallet){
-                toast("Safe wallet not found in profile, creating one.")
-                
-            }
-
-            // 4) Ensure allowances + CLOB creds on server (idempotent)
-            if ((!status.hasAllowances || !status.hasClobCreds) && embedded.id) {
-                toast("ensuring allowances and clob creds")
-                await ensureOnchainAndClob({
-                    userId: user.id,
-                    walletId: embedded.id,
-                    eoaAddress: embedded.address as `0x${string}`,
-                    chainId: 137,
-                });
-            }
-            setProfileSetupLoading(false)
-            toast("done")
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Post-login provisioning failed:", err);
-                setProfileSetupLoading(false)
+                // Give a more helpful error message
+                toast.error("Setup failed. Please refresh and try again.", {
+                    description: err.message || "An unknown error occurred.",
+                });
+                setProfileSetupLoading(false);
             }
         },
         onError: (e) => console.log("Privy login error:", e),
-    })
-
+    });
     if(!ready) {
         return (
             <ReadyLoader/>
