@@ -22,115 +22,9 @@ interface LayoutProps {
 const Layout = ({ children }: LayoutProps) => {
     const {ready, authenticated} = usePrivy()
     const [profileSetupLoading, setProfileSetupLoading] = React.useState(false)
+    const [loadingMessage, setLoadingMessage] = React.useState("Setting up your profile...");
     const {addSessionSigners} = useSessionSigners()
-    // const {login} = useLogin({
-    //     onComplete: async ({ user }) => {
-    //         try {
-    //             setProfileSetupLoading(true)
-    //             const accessToken = await getAccessToken();
-    //             toast("Event has been created", {
-    //                 description: "Performing account provisioning...",
-    //                 action: {
-    //                     label: "Undo",
-    //                     onClick: () => console.log("Undo"),
-    //                 },
-    //             })
-    //             if (!accessToken) {
-    //                 toast("Couldn't find access token")
-    //                 setProfileSetupLoading(false)
-    //                 throw new Error("No access token")
-    //             };
 
-    //             // 1) What do we already have?
-    //             let status = await getProvisioningStatus(user.id);
-
-    //             // 2) Ensure profile exists
-    //             if (!status.exists) {
-    //                 const created = await createUser(user, accessToken);
-    //                 if (!created?.success) {
-    //                     setProfileSetupLoading(false)
-    //                     toast("failed to create a profile")
-    //                     throw new Error("createUser failed")
-    //                 };
-    //                 toast("successfully created profile")
-    //                 status = await getProvisioningStatus(user.id);
-    //             }
-
-    //             // 3) Ensure session signer (client-side)
-    //             const embedded = user.linkedAccounts.find(isEmbeddedEvmWallet);
-    //             if (!embedded) {
-    //                 setProfileSetupLoading(false)
-    //                 toast("an error with wallet occured please refresh")
-    //                 throw new Error("No embedded EVM wallet")
-    //             }
-                
-    //             toast("almost finished configurating profile")
-    //             // If Privy already marked this wallet as delegated, we’re done for signers
-    //             const alreadyDelegated = (embedded as any).delegated === true;
-    //             if (alreadyDelegated) {
-    //                 if (!status.signers_added) {
-    //                     const res = await markHasSessionSigner(user.id);
-    //                 }
-    //                 status = { ...status, signers_added: true };
-    //             } else if (!status.signers_added) {
-    //                 toast("handling allowances")
-    //                 const quorumId = process.env.NEXT_PUBLIC_PRIVY_SIGNER_ID!;
-    //                 if (!quorumId) throw new Error("Missing NEXT_PUBLIC_PRIVY_SIGNER_ID");
-    //                 toast("step 1/3 complete")
-
-    //                 try {
-    //                     await addSessionSigners({
-    //                         address: embedded.address,
-    //                         signers: [{ signerId: quorumId, policyIds: [] }],
-    //                     });
-    //                     toast("step 2/3 complete")
-    //                     await markHasSessionSigner(user.id);
-    //                     toast("step 3/3 complete")
-    //                     status = { ...status, signers_added: true };
-    //                 } catch (e: any) {
-    //                     setProfileSetupLoading(false)
-    //                     // Idempotency: ignore "already delegated/has signer" errors
-    //                     const msg = String(e?.message || "");
-    //                     const code = e?.response?.status;
-    //                     if (
-    //                         code === 409 ||                          // conflict
-    //                         /already.*(delegated|signer)/i.test(msg) // friendly match
-    //                     ) {
-    //                         await markHasSessionSigner(user.id);
-    //                         status = { ...status, signers_added: true };
-    //                     } else {
-    //                         throw e;
-    //                     }
-    //                 }
-    //             }
-
-
-    //         // 4) - updated. Check for safe_wallet_address
-
-    //         if(!status.hasSafeWallet){
-    //             toast("Safe wallet not found in profile, creating one.")
-                
-    //         }
-
-    //         // 4) Ensure allowances + CLOB creds on server (idempotent)
-    //         if ((!status.hasAllowances || !status.hasClobCreds) && embedded.id) {
-    //             toast("ensuring allowances and clob creds")
-    //             await ensureOnchainAndClob({
-    //                 userId: user.id,
-    //                 walletId: embedded.id,
-    //                 eoaAddress: embedded.address as `0x${string}`,
-    //                 chainId: 137,
-    //             });
-    //         }
-    //         setProfileSetupLoading(false)
-    //         toast("done")
-    //         } catch (err) {
-    //             console.error("Post-login provisioning failed:", err);
-    //             setProfileSetupLoading(false)
-    //         }
-    //     },
-    //     onError: (e) => console.log("Privy login error:", e),
-    // })
     const { login } = useLogin({
         onComplete: async ({ user }) => {
             // A simple helper function for delays
@@ -138,15 +32,18 @@ const Layout = ({ children }: LayoutProps) => {
 
             try {
                 setProfileSetupLoading(true);
+                setLoadingMessage("Initializing session..."); // Initial message
                 const accessToken = await getAccessToken();
                 if (!accessToken) throw new Error("No access token");
 
                 toast.info("Checking your vatic profile...");
+                setLoadingMessage("Checking vatic profile...");
                 let status = await getProvisioningStatus(user.id);
 
                 // 1) Ensure profile exists
                 if (!status.exists) {
                     toast.info("Creating your profile...");
+                    setLoadingMessage("Creating your secure profile...");
                     const created = await createUser(user, accessToken);
                     if (!created?.success) throw new Error("Failed to create profile");
                     status = await getProvisioningStatus(user.id);
@@ -157,7 +54,8 @@ const Layout = ({ children }: LayoutProps) => {
                 if (!embedded) throw new Error("No embedded EVM wallet found");
 
                 if (!status.signers_added) {
-                    toast.info("Please approve the request to enable trading...");
+                    toast.info("Approving the request to enable trading...");
+                    setLoadingMessage("Waiting for trade approval..."); // User sees this while Privy modal is open
                     const quorumId = process.env.NEXT_PUBLIC_PRIVY_SIGNER_ID!;
                     try {
                         await addSessionSigners({
@@ -167,6 +65,7 @@ const Layout = ({ children }: LayoutProps) => {
                         await markHasSessionSigner(user.id);
                         status.signers_added = true;
                         toast.success("Trading session approved!");
+                        setLoadingMessage("Approval confirmed. Finalizing setup..."); // New message after approval
                         // IMPORTANT: Add a small delay here to allow for propagation
                         await sleep(2000); // Wait 2 seconds
                     } catch (e: any) {
@@ -184,10 +83,14 @@ const Layout = ({ children }: LayoutProps) => {
                 // 3) Ensure allowances + CLOB creds with a retry loop
                 if (!status.hasAllowances || !status.hasClobCreds) {
                     toast.info("Setting up your on-chain trading wallet...");
+                    setLoadingMessage("Deploying your on-chain trading wallet...");
                     let success = false;
                     const maxRetries = 3;
                     for (let i = 1; i <= maxRetries; i++) {
                         try {
+                            if (i > 1) {
+                                setLoadingMessage(`Wallet setup taking longer than usual... (Attempt ${i}/${maxRetries})`);
+                            }
                             if(!embedded.id) {
                                 throw new Error("No embedded EVM wallet ID found");
                             }
@@ -212,6 +115,7 @@ const Layout = ({ children }: LayoutProps) => {
                 }
 
                 setProfileSetupLoading(false);
+                setLoadingMessage("Setup complete!"); // Final success message
                 toast.success("Setup complete! Welcome to vatic.");
 
             } catch (err: any) {
@@ -220,6 +124,7 @@ const Layout = ({ children }: LayoutProps) => {
                 toast.error("Setup failed. Please refresh and try again.", {
                     description: err.message || "An unknown error occurred.",
                 });
+                setLoadingMessage("An error occurred. Please refresh the page. "); // Update message on error
                 setProfileSetupLoading(false);
             }
         },
@@ -238,13 +143,13 @@ const Layout = ({ children }: LayoutProps) => {
     }
     if(ready && authenticated) {
         console.log("ready and authenticated")
-        if(profileSetupLoading) {
-
-            console.log("profileSetupLoading")
+        if (profileSetupLoading) {
             return (
                 <div className="flex flex-col items-center justify-center min-h-screen gap-4">
                     <Spinner className="size-8"/>
-                    <p className="text-lg font-medium">Setting up your profile...</p>
+                    {/* Use the new state variable here */}
+                    <p className="text-lg font-medium text-white/90">{loadingMessage}</p>
+                    <p className="text-sm text-white/60">This may take up to a 2-3. Please don't close this window.</p>
                 </div>
             )
         }
