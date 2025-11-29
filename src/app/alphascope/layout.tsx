@@ -149,7 +149,7 @@ const Layout = ({ children }: LayoutProps) => {
                     <Spinner className="size-8"/>
                     {/* Use the new state variable here */}
                     <p className="text-lg font-medium text-white/90">{loadingMessage}</p>
-                    <p className="text-sm text-white/60">This may take up to a 2-3. Please don't close this window.</p>
+                    <p className="text-sm text-white/60">This may take up to a 2-3 minutes. Please do not close this window.</p>
                 </div>
             )
         }
