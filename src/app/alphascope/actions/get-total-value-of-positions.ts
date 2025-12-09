@@ -15,3 +15,4 @@ export async function getPolymarketTotalValue(address: `0x${string}`) {
     raw: data, // optional, for per-market details
   };
 }
+

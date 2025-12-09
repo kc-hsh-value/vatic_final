@@ -115,16 +115,6 @@ export default function VaticUserProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if(safeWalletAddress?.address) {
       setSafeWallet({ address: safeWalletAddress.address });
-      // initFromPrivy({
-      //   ready,
-      //   authenticated,
-      //   userId: (basics as any)?.userId,
-      //   username: (basics as any)?.username ?? null,
-      //   avatarUrl: (basics as any)?.avatarUrl ?? null,
-      //   eoaAddress: (basics as any)?.eoaAddress,
-      //   walletId: (basics as any)?.walletId,
-      //   safeWalletAddress: safeWalletAddress.address,
-      // })
     }
   }, [safeWalletAddress, setSafeWallet])
 
@@ -144,12 +134,6 @@ export default function VaticUserProvider({ children }: PropsWithChildren) {
       console.log("usdc", usdc);
       console.log("clob", clob);
       console.log("value", value);
-      // setWallet({
-      //   balanceUSDC: usdc,
-      //   lockedUSDC: clob.locked,
-      //   lastSyncAt: Date.now(),
-      //   positionsValue: value.totalValue,
-      // });
       setSafeWallet({
         balanceUSDC: usdc,
         lockedUSDC: clob.locked,
