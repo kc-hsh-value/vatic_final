@@ -29,9 +29,9 @@ export async function fetchBatchPrices(tokenIds: string[]): Promise<PriceMap> {
     
     // The API returns a Map-like object
     for (const [tokenId, sides] of Object.entries(raw)) {
-      // @ts-ignore
+      // @ts-expect-error -- sides has dynamic keys
       if (sides && sides.SELL) {
-        // @ts-ignore
+        // @ts-expect-error -- sides has dynamic keys
         prices[tokenId] = parseFloat(sides.SELL);
       }
     }

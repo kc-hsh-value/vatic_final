@@ -118,7 +118,7 @@ export default function AlphaFeed() {
                   
                   <div className="mt-auto pt-2 border-t border-border/30">
                     <p className="text-[10px] text-muted-foreground italic line-clamp-1">
-                      AI: "{market.reason}"
+                      AI: &apos;{market.reason}&apos;
                     </p>
                   </div>
                 </a>

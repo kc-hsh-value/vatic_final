@@ -117,7 +117,7 @@ export default function GlobalFeedPage() {
                       <div className="text-xs font-medium text-foreground line-clamp-2 mb-1">
                         {m.question.replace("Market: ", "")}
                       </div>
-                      <div className="text-[10px] text-gray-500 italic line-clamp-2">"{m.reason}"</div>
+                      <div className="text-[10px] text-gray-500 italic line-clamp-2">&apos;{m.reason}&apos;</div>
                     </a>
                   ))}
                 </div>
