@@ -1,22 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useVaticUser } from "@/app/hooks/use-vatic-user"; // Or wherever your store is
+import { useVaticUser } from "@/app/hooks/use-vatic-user";
 import { fetchFeed, FeedFilter } from "./actions/actions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, ExternalLink, RefreshCw, Zap } from "lucide-react";
+import { ExternalLink, RefreshCw, Zap, Settings2, TrendingUp, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { formatSlugToTitle } from "@/lib/utils";
-import { usePolymarketPrices } from "@/app/hooks/use-prices"; 
+import { usePolymarketPrices } from "@/app/hooks/use-prices";
+import { ManageSourcesDialog } from "./components/manage-sources-dialog";
+import { MediaEntity, TweetMedia } from "./components/tweet_media";
 
+// ... Types remain the same ...
 type Market = {
   market_id: string;
   question: string;
@@ -24,8 +26,8 @@ type Market = {
   market_slug: string;
   outcomes: string[];
   clobTokenIds: string[];
-  event_image?: string;   // New
-  market_image?: string;  // New
+  event_image?: string;
+  market_image?: string;
   reason: string;
   urgency_score: number;
   relevance_score: number;
@@ -41,7 +43,18 @@ type TweetCorrelation = {
   published_at: string;
   max_urgency: number;
   markets: Market[];
+   media_info: MediaEntity[];
 };
+
+function cleanTweetText(text: string, media: MediaEntity[] | null) {
+  if (!media || !text) return text;
+  let clean = text;
+  media.forEach(m => {
+    if (m.url) clean = clean.replace(m.url, '');
+  });
+  return clean.trim();
+}
+
 
 export default function FeedPage() {
   const { auth } = useVaticUser();
@@ -50,8 +63,10 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  
+  // Manage Sources Modal State
+  const [manageOpen, setManageOpen] = useState(false);
 
-  // Initial Fetch
   useEffect(() => {
     if (!auth.authenticated || !auth.userId) return;
     loadFeed(true);
@@ -60,10 +75,9 @@ export default function FeedPage() {
   const loadFeed = async (reset = false) => {
     if (!auth.userId) return;
     
-    setLoading(true);
+    if(reset) setLoading(true);
     const currentPage = reset ? 0 : page;
     
-    // Call the Server Action
     const res = await fetchFeed(auth.userId, activeTab, currentPage);
     
     if (!res.success) {
@@ -78,18 +92,11 @@ export default function FeedPage() {
       setItems(newItems);
       setPage(1);
     } else {
-      // --- DEDUPLICATION LOGIC STARTS HERE ---
       setItems((prev) => {
-        // Create a Set of existing IDs for O(1) lookup
         const existingIds = new Set(prev.map((item) => item.tweet_id));
-        
-        // Only keep new items that aren't already in the list
         const uniqueNew = newItems.filter((item) => !existingIds.has(item.tweet_id));
-        
         return [...prev, ...uniqueNew];
       });
-      // --- DEDUPLICATION LOGIC ENDS HERE ---
-      
       setPage((prev) => prev + 1);
     }
 
@@ -100,39 +107,63 @@ export default function FeedPage() {
   };
 
   return (
-    <main className="container max-w-4xl mx-auto py-8 px-4">
+    <main className="container max-w-5xl mx-auto py-6 sm:py-8 px-4 sm:px-6">
       <div className="flex flex-col gap-6">
         
-        {/* Header */}
-        <div className="flex items-center justify-between">
+        {/* --- Header Area --- */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Alpha Feed</h1>
-            <p className="text-muted-foreground text-sm">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+              Alpha Feed <span className="text-xs font-mono font-normal text-green-400 bg-green-400/10 px-2 py-0.5 rounded border border-green-400/20">LIVE</span>
+            </h1>
+            <p className="text-muted-foreground text-sm mt-1">
               Real-time semantic correlations between X and Polymarket.
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => loadFeed(true)} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+             <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => loadFeed(true)} 
+                disabled={loading}
+                className="flex-1 sm:flex-none border-white/10 hover:bg-white/5"
+             >
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+            
+            {/* Manage Sources Button (visible on all tabs for easy access) */}
+            <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={() => setManageOpen(true)}
+                className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-500 text-white border-none"
+             >
+               <Settings2 className="mr-2 h-4 w-4"/>
+               Sources
+            </Button>
+          </div>
         </div>
 
-        {/* Tabs */}
+        {/* --- Tabs & Content --- */}
         <Tabs defaultValue="global" onValueChange={(v: string) => setActiveTab(v as FeedFilter)} className="w-full">
-          <TabsList className="grid w-full max-w-[400px] grid-cols-2">
-            <TabsTrigger value="global">Global Feed</TabsTrigger>
-            <TabsTrigger value="following">My Following</TabsTrigger>
+          <TabsList className="grid w-full sm:w-[400px] grid-cols-2 bg-black/40 border border-white/10 p-1">
+            <TabsTrigger value="global" className="data-[state=active]:bg-white/10">Global Feed</TabsTrigger>
+            <TabsTrigger value="following" className="data-[state=active]:bg-white/10">My Following</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="global" className="mt-6 space-y-4">
+          <TabsContent value="global" className="mt-6 space-y-4 min-h-[50vh]">
             <FeedList items={items} loading={loading} />
           </TabsContent>
           
-          <TabsContent value="following" className="mt-6 space-y-4">
+          <TabsContent value="following" className="mt-6 space-y-4 min-h-[50vh]">
              {items.length === 0 && !loading ? (
-                <div className="text-center py-12 text-muted-foreground border border-dashed rounded-lg">
-                   You are not following any accounts yet. 
-                   <br/> Add accounts in settings to populate this feed.
+                <div className="flex flex-col items-center justify-center py-20 text-muted-foreground border border-dashed border-white/10 rounded-xl bg-white/5 gap-4">
+                   <p className="text-center">You are not following any accounts yet.</p>
+                   <Button onClick={() => setManageOpen(true)} variant="default">
+                     <TrendingUp className="mr-2 h-4 w-4" /> Add Accounts
+                   </Button>
                 </div>
              ) : (
                <FeedList items={items} loading={loading} />
@@ -144,14 +175,17 @@ export default function FeedPage() {
         {hasMore && items.length > 0 && (
           <Button 
             variant="ghost" 
-            className="self-center mt-4" 
+            className="self-center mt-4 w-full sm:w-auto text-white/50 hover:text-white" 
             onClick={() => loadFeed(false)} 
             disabled={loading}
           >
-            {loading ? "Loading..." : "Load More"}
+            {loading ? "Loading..." : "Load More Activity"}
           </Button>
         )}
       </div>
+      
+      {/* The Dialog */}
+      <ManageSourcesDialog open={manageOpen} onOpenChange={setManageOpen} />
     </main>
   );
 }
@@ -164,7 +198,7 @@ function FeedList({ items, loading }: { items: TweetCorrelation[]; loading: bool
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {items.map((item) => (
         <TweetCard key={item.tweet_id} data={item} />
       ))}
@@ -181,127 +215,129 @@ function TweetCard({ data }: { data: TweetCorrelation }) {
     return acc;
   }, {} as Record<string, typeof data.markets>);
 
-  // 2. Extract ALL token IDs needed for this card to batch fetch
+  // 2. Extract Token IDs for Prices
   const allTokenIds = data.markets.flatMap((m) => m.clobTokenIds || []);
-
-  // 3. Fetch Prices (Polls every 15s)
   const { data: prices } = usePolymarketPrices(allTokenIds);
 
   return (
-    <Card className="border-l-4 border-l-transparent hover:border-l-primary transition-all bg-card/50 backdrop-blur-sm">
-      <CardHeader className="flex flex-row items-start gap-4 pb-2">
-        {/* Author Avatar */}
-        <Avatar className="h-10 w-10 border border-white/10">
-          <AvatarImage src={data.author_avatar} />
-          <AvatarFallback>{data?.author_name ? data.author_name[0] : "?"}</AvatarFallback>
-        </Avatar>
-
-        <div className="flex-1 space-y-1">
-           {/* Header Line */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm">{data.author_name}</span>
-              <span className="text-muted-foreground text-xs">@{data.author_handle}</span>
-              <span className="text-muted-foreground text-xs">• {formatDistanceToNow(new Date(data.published_at))} ago</span>
-              
-              <Link 
-                href={data.tweet_url} 
-                target="_blank" 
-                rel="noreferrer"
-                className="text-muted-foreground hover:text-blue-400 transition-colors"
-              >
-                <ExternalLink className="h-3 w-3" />
-              </Link>
-            </div>
-            <UrgencyBadge score={data.max_urgency} />
-          </div>
-
-          <p className="text-sm leading-relaxed whitespace-pre-wrap text-white/90 mt-1">
-            {data.tweet_text}
-          </p>
+    <Card className="border border-white/10 bg-[#0F1115] shadow-lg overflow-hidden transition-all hover:border-white/20">
+      
+      {/* --- Tweet Content Section --- */}
+      <div className="p-4 flex flex-row gap-4">
+        {/* Avatar Column */}
+        <div className="shrink-0">
+            <Avatar className="h-11 w-11 rounded-md border border-white/10">
+            <AvatarImage src={data.author_avatar} />
+            <AvatarFallback>{data?.author_name ? data.author_name[0] : "?"}</AvatarFallback>
+            </Avatar>
         </div>
-      </CardHeader>
 
-      <CardContent className="pt-0">
-        <Accordion type="single" collapsible className="w-full space-y-2">
+        {/* Content Column */}
+        <div className="flex-1 min-w-0">
+            {/* Header: Name, Handle, Time, Urgency */}
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-bold text-sm text-white truncate">{data.author_name}</span>
+                    <span className="text-white/40 text-xs truncate">@{data.author_handle}</span>
+                    <span className="text-white/40 text-xs whitespace-nowrap">• {formatDistanceToNow(new Date(data.published_at))} ago</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <UrgencyBadge score={data.max_urgency} />
+                    <Link href={data.tweet_url} target="_blank" className="text-white/20 hover:text-blue-400 transition-colors">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                    </Link>
+                </div>
+            </div>
+
+            {/* Tweet Text (Cleaned of media URLs) */}
+            <p className="text-[15px] leading-6 text-white/90 whitespace-pre-wrap break-words">
+                {cleanTweetText(data.tweet_text, data.media_info)}
+            </p>
+
+            {/* --- NEW: Rich Media Component --- */}
+            {/* This renders the Video, Photo Grid, or Article Card */}
+            <TweetMedia media={data.media_info} />
+
+        </div>
+      </div>
+
+      {/* --- Markets Section (Accordion) --- */}
+      <div className="border-t border-white/5 bg-black/20">
+        <Accordion type="single" collapsible className="w-full">
           {Object.entries(groupedMarkets).map(([slug, markets]) => {
              const eventMeta = markets[0];
              
              return (
-              <AccordionItem value={slug} key={slug} className="border border-white/5 rounded-lg overflow-hidden bg-white/5 px-0">
+              <AccordionItem value={slug} key={slug} className="border-b-0 border-white/5 last:border-0">
                 
-                {/* --- TRIGGER --- */}
-                <AccordionTrigger className="hover:no-underline px-3 py-2 group">
-                  <div className="flex items-center gap-3 text-left w-full">
+                {/* Accordion Trigger */}
+                <AccordionTrigger className="hover:no-underline px-4 py-3 group hover:bg-white/5 transition-colors">
+                  <div className="flex items-center gap-3 text-left w-full overflow-hidden">
                      {/* Event Image */}
-                     {eventMeta.event_image ? (
-                        <img 
-                          src={eventMeta.event_image} 
-                          alt="Event" 
-                          className="w-8 h-8 rounded-full object-cover bg-white/10"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} 
-                        />
-                     ) : (
-                        <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-500 text-xs font-bold">E</div>
-                     )}
+                     <div className="shrink-0">
+                        {eventMeta.event_image ? (
+                            <img 
+                            src={eventMeta.event_image} 
+                            alt="Event" 
+                            className="w-10 h-10 rounded-md object-cover bg-white/5 border border-white/10"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} 
+                            />
+                        ) : (
+                            <div className="w-10 h-10 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/20">
+                                <Zap className="w-5 h-5"/>
+                            </div>
+                        )}
+                     </div>
 
-                     <div className="flex flex-col flex-1">
+                     <div className="flex flex-col flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-blue-400 leading-none group-hover:text-blue-300 transition-colors">
+                            <span className="text-sm font-semibold text-blue-400 leading-tight group-hover:text-blue-300 transition-colors truncate">
                                 {formatSlugToTitle(slug)} 
                             </span>
-                            <Link
-                                href={`https://polymarket.com/event/${slug}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-white"
-                            >
-                                <ExternalLink className="h-3 w-3" />
-                            </Link>
                         </div>
-                        <span className="text-[10px] text-muted-foreground mt-1">
-                          {markets.length} market{markets.length > 1 ? 's' : ''} affected
+                        <span className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2">
+                          <span>{markets.length} market{markets.length > 1 ? 's' : ''} correlated</span>
+                          <span className="hidden sm:inline-flex items-center gap-1 text-white/30">• <Zap className="w-3 h-3"/> AI Reason Inside</span>
                         </span>
                      </div>
                   </div>
                 </AccordionTrigger>
 
-                {/* --- CONTENT --- */}
-                <AccordionContent className="px-3 pb-3 pt-1">
+                {/* Accordion Content */}
+                <AccordionContent className="px-4 pb-4 pt-0">
                   
-                  {/* Reasoning */}
-                  <div className="mb-3 p-2 bg-blue-500/5 border border-blue-500/10 rounded text-[11px] text-blue-200/80 italic flex gap-2">
-                    <Zap className="w-3 h-3 mt-0.5 shrink-0 text-blue-400" />
-                    {eventMeta.reason}
+                  {/* Reasoning Box */}
+                  <div className="mb-4 mt-1 p-3 bg-blue-500/5 border border-blue-500/10 rounded-md text-xs text-blue-100/80 leading-relaxed flex gap-3">
+                    <Zap className="w-4 h-4 mt-0.5 shrink-0 text-blue-400" />
+                    <div>
+                        <span className="font-bold text-blue-400 uppercase text-[10px] tracking-wider block mb-1">Correlation Analysis</span>
+                        {eventMeta.reason}
+                    </div>
                   </div>
 
                   {/* Market List */}
                   <div className="space-y-2">
                     {markets.map((m) => (
-                      <div key={m.market_id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/20 p-2 rounded border border-white/5">
+                      <div key={m.market_id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/5 p-3 rounded-md border border-white/5 hover:border-white/10 transition-colors">
                          
                          {/* Question Title */}
-                         <div className="flex items-start gap-2">
+                         <div className="flex-1">
                             <Link 
                                 href={`https://polymarket.com/event/${slug}/${m.market_slug}`}
                                 target="_blank"
-                                rel="noreferrer"
-                                className="text-xs text-white/90 font-medium leading-snug hover:text-blue-400 hover:underline decoration-blue-400/50 underline-offset-2 transition-all"
+                                className="text-sm text-white/90 font-medium leading-snug hover:text-blue-400 transition-colors block"
                             >
                                 {m.question}
                             </Link>
                          </div>
                          
                          {/* Outcome Buttons with PRICES */}
-                         <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                         <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
                             {m.outcomes && m.outcomes.length > 0 ? (
                                 m.outcomes.map((outcome, idx) => {
-                                    // Map Outcome Index -> CLOB Token ID
                                     const tokenId = m.clobTokenIds ? m.clobTokenIds[idx] : null;
                                     const price = tokenId && prices ? prices[tokenId] : null;
                                     
-                                    // Formatting: 0.55 -> 55¢
                                     const priceLabel = price 
                                         ? `${(price * 100).toFixed(0)}¢` 
                                         : <span className="animate-pulse">--</span>;
@@ -311,19 +347,17 @@ function TweetCard({ data }: { data: TweetCorrelation }) {
                                             key={idx} 
                                             size="sm" 
                                             variant="secondary" 
-                                            className="h-6 text-[10px] px-2 bg-white/10 hover:bg-white/20 hover:text-white border border-white/5 min-w-[60px] flex justify-between gap-2"
+                                            className="h-8 text-xs px-3 bg-black/40 hover:bg-white/10 border border-white/10 flex-1 sm:flex-none justify-between gap-3 min-w-[80px]"
                                         >
-                                            <span>{outcome}</span>
-                                            <span className="text-green-400 font-mono font-bold">
+                                            <span className="text-white/70 truncate max-w-[80px]">{outcome}</span>
+                                            <span className={`font-mono font-bold ${price ? (price > 0.5 ? 'text-green-400' : 'text-red-400') : 'text-white/30'}`}>
                                                 {priceLabel}
                                             </span>
                                         </Button>
                                     );
                                 })
                             ) : (
-                                <Button size="sm" variant="outline" className="h-6 text-[10px]">
-                                    Trade
-                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 text-xs w-full">Trade</Button>
                             )}
                          </div>
                       </div>
@@ -335,38 +369,37 @@ function TweetCard({ data }: { data: TweetCorrelation }) {
             )
           })}
         </Accordion>
-      </CardContent>
+      </div>
     </Card>
   );
 }
+
 function UrgencyBadge({ score }: { score: number }) {
-  // Logic to color code urgency
-  let color = "bg-blue-500/10 text-blue-500 border-blue-500/20";
-  let label = "Low Urgency";
-
   if (score >= 0.8) {
-    color = "bg-rose-500/10 text-rose-500 border-rose-500/20 animate-pulse";
-    label = "CRITICAL";
-  } else if (score >= 5) {
-    color = "bg-amber-500/10 text-amber-500 border-amber-500/20";
-    label = "High Urgency";
+    return (
+        <div className="flex items-center gap-1 bg-red-500/10 border border-red-500/20 text-red-500 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+            <AlertTriangle className="w-3 h-3" /> Critical
+        </div>
+    )
   }
-
   return (
-    <div className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border ${color}`}>
-      {label}
+    <div className="bg-blue-500/10 border border-blue-500/20 text-blue-500 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+        Alpha
     </div>
   );
 }
 
 function FeedItemSkeleton() {
   return (
-    <div className="flex gap-4 p-4 border rounded-lg bg-card/20">
-      <Skeleton className="h-10 w-10 rounded-full" />
-      <div className="flex-1 space-y-2">
-        <Skeleton className="h-4 w-1/4" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-20 w-full rounded-md mt-4" />
+    <div className="flex gap-4 p-4 border border-white/5 rounded-lg bg-[#0F1115]">
+      <Skeleton className="h-10 w-10 rounded-full bg-white/10" />
+      <div className="flex-1 space-y-3">
+        <div className="flex justify-between">
+            <Skeleton className="h-4 w-1/3 bg-white/10" />
+            <Skeleton className="h-4 w-16 bg-white/10" />
+        </div>
+        <Skeleton className="h-4 w-full bg-white/10" />
+        <Skeleton className="h-20 w-full rounded-md mt-4 bg-white/5" />
       </div>
     </div>
   );
