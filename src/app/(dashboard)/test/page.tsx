@@ -73,12 +73,16 @@ export default function FeedPage() {
   }, [auth.authenticated, auth.userId, activeTab]);
 
   const loadFeed = async (reset = false) => {
+    console.log("Loading feed...", { reset, page, activeTab });
     if (!auth.userId) return;
+    // console.log("user exists to load the feed")
     
     if(reset) setLoading(true);
+    // console.log("Loading feed with parameters:", { reset, page, activeTab });
     const currentPage = reset ? 0 : page;
     
     const res = await fetchFeed(auth.userId, activeTab, currentPage);
+    // console.log("Feed loaded:", res);
     
     if (!res.success) {
       toast.error("Failed to load feed");

@@ -74,3 +74,24 @@ export type NormalizedEvent = {
   tags?: string[];
   markets: NormalizedMarket[];
 };
+
+export interface EnrichedCorrelation {
+  id: string; // correlation id
+  tweet_id: string;
+  market_id: string;
+  relevance_score: number;
+  relevance_reason: string;
+  urgency_score: number;
+  created_at_utc: string;
+  tweet: {
+    text: string;
+    tweet_url: string;
+    author_name: string;
+    published_at: string;
+    x_account?: {
+      profile_picture: string;
+      handle: string;
+      followers_count: number;
+    }
+  }
+}

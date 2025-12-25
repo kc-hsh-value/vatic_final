@@ -12,12 +12,13 @@ export async function fetchFeed(
   page: number = 0, 
   limit: number = 20
 ) {
+  // console.log("fetchFeed called with:", { userId, filter, page, limit });
   const offset = page * limit;
   
   // Logic: If filter is 'global', we pass null for p_user_id.
   // If 'following', we pass the actual userId.
   const dbUserId = filter === "following" ? userId : null;
-
+  // console.log("Determined dbUserId:", dbUserId);
   try {
     const { data, error } = await supabaseAdmin.rpc("get_correlated_feed", {
       p_user_id: dbUserId,
@@ -25,6 +26,7 @@ export async function fetchFeed(
       p_limit: limit,
       p_offset: offset,
     });
+    // console.log("RPC call result:", { data, error });
 
     if (error) {
       console.error("RPC Error:", error);

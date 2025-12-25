@@ -1,7 +1,8 @@
 "use client";
 
 import { Play, ExternalLink, FileText } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 
 export interface MediaEntity {
   type: "photo" | "video" | "animated_gif" | "link";
@@ -122,6 +123,9 @@ function LightboxImage({ src, className }: { src: string, className: string }) {
                 <img src={src} className={className} loading="lazy" />
             </DialogTrigger>
             <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 border-none bg-transparent shadow-none flex items-center justify-center">
+                <VisuallyHidden>
+                    <DialogTitle>Image preview</DialogTitle>
+                </VisuallyHidden>
                 <img src={src} className="max-w-full max-h-[90vh] rounded-md shadow-2xl" />
             </DialogContent>
         </Dialog>
