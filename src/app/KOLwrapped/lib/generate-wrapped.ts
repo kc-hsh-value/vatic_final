@@ -1,4 +1,4 @@
-"use client";
+"use server";
 
 import { getTwitterProfile } from "../actions/twitter/get-twitter-profile";
 import { fetchUserTweetsPaged } from "../services/twitter-tweet-service";
@@ -35,10 +35,11 @@ export async function generateWrapped(xUsername: string): Promise<WrappedResult>
   const tweetsPromise = fetchUserTweetsPaged({
     userId: profile.id,
     includeReplies: false,
+    includeRetweets: false,
     maxTweets: 120,
     maxPages: 10,
     pageTimeoutMs: 9000,
-  });
+    });
 
   const addressPromise = findPolymarketAddressByXUsername(xUsername);
 

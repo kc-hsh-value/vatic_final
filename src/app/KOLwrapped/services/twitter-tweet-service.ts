@@ -20,21 +20,36 @@ async function withBudget<T>(p: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([p, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
 }
 
+// ✅ central predicate so you can tweak later
+function isRetweetLike(t: any): boolean {
+  const text = String(t?.text ?? "");
+  // classic RT
+  if (/^RT\s+@/i.test(text)) return true;
+
+  // providers sometimes expose explicit fields (keep these checks loose)
+  if (t?.isRetweet === true) return true;
+  if (t?.retweeted_tweet || t?.retweetedTweet || t?.retweeted_status) return true;
+
+  return false;
+}
+
 export async function fetchUserTweetsPaged(params: {
-  userId: string; // ✅ Prefer userId: more stable/faster than userName
+  userId: string;
   includeReplies?: boolean;
 
-  // target amount
-  maxTweets?: number; // default 40
-  maxPages?: number; // default 2
+  maxTweets?: number;
+  maxPages?: number;
 
-  // safety
-  pageTimeoutMs?: number; // default 9000
-  minTweetsPerPage?: number; // default 5
+  pageTimeoutMs?: number;
+  minTweetsPerPage?: number;
+
+  // ✅ add a switch (default false)
+  includeRetweets?: boolean;
 }): Promise<Tweet[]> {
   const {
     userId,
     includeReplies = false,
+    includeRetweets = false,
     maxTweets = 40,
     maxPages = 2,
     pageTimeoutMs = 9000,
@@ -42,7 +57,7 @@ export async function fetchUserTweetsPaged(params: {
   } = params;
 
   const out: Tweet[] = [];
-  let cursor = ""; // first page
+  let cursor = "";
 
   for (let page = 0; page < maxPages; page++) {
     const res = await withBudget(
@@ -50,7 +65,6 @@ export async function fetchUserTweetsPaged(params: {
       pageTimeoutMs
     );
 
-    // timed out => stop cleanly
     if (!res) break;
 
     const tweets: any[] = res?.data?.tweets ?? res?.tweets ?? [];
@@ -60,6 +74,9 @@ export async function fetchUserTweetsPaged(params: {
     if (!tweets.length) break;
 
     for (const t of tweets) {
+      // ✅ drop RTs early
+      if (!includeRetweets && isRetweetLike(t)) continue;
+
       out.push({
         id: String(t.id),
         text: String(t.text ?? ""),
@@ -75,13 +92,10 @@ export async function fetchUserTweetsPaged(params: {
       if (out.length >= maxTweets) return out.slice(0, maxTweets);
     }
 
-    // If API returns tiny pages (sometimes happens), stop early
     if (tweets.length < minTweetsPerPage) break;
-
     if (!hasNext || !nextCursor) break;
-    cursor = nextCursor;
 
-    // tiny pacing to reduce provider weirdness/throttling
+    cursor = nextCursor;
     await sleep(100);
   }
 

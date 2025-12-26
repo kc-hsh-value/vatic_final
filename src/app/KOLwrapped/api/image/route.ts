@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic"; // ✅ critical
+
 const ALLOW_HOSTS = new Set(["pbs.twimg.com"]);
 
 export async function GET(req: Request) {
@@ -18,11 +20,10 @@ export async function GET(req: Request) {
     return new NextResponse("Host not allowed", { status: 403 });
   }
 
+  // ✅ don't let Next "data cache" do weird things here
   const upstream = await fetch(u.toString(), {
-    // Twitter sometimes behaves better with a UA
     headers: { "User-Agent": "Mozilla/5.0 VaticWrapped/1.0" },
-    // cache is fine, these are public avatars/badges
-    cache: "force-cache",
+    cache: "no-store",
   });
 
   if (!upstream.ok) {
@@ -35,7 +36,7 @@ export async function GET(req: Request) {
   return new NextResponse(buf, {
     headers: {
       "Content-Type": contentType,
-      "Cache-Control": "public, max-age=86400, s-maxage=86400",
+      "Cache-Control": "no-store",
     },
   });
 }
