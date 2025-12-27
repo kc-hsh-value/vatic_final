@@ -8,15 +8,17 @@ import { isEmbeddedEvmWallet } from '@/types/polymarket';
 
 import ReactQueryProvider from '@/providers/query-provider';
 import VaticUserProvider from '@/providers/vatic-user-provider';
+
+
+import GateScreen from '../auth/components/gate-screen';
 import { getProvisioningStatus } from '../alphascope/actions/get-provisioning-status';
+import { checkAccessCookie } from '../auth/actions/gate';
 import { createUser } from '../alphascope/actions/create-user';
 import { markHasSessionSigner } from '../alphascope/actions/update-flags';
 import { ensureOnchainAndClob } from '../alphascope/actions/ensure-allowances-and-clob-credentials';
 import ReadyLoader from '../alphascope/components/ready-loader';
 import LoginScreen from '../alphascope/components/login-screen';
 import NewNavbar from '../alphascope/components/new-navbar';
-import { checkAccessCookie } from '@/app/auth/actions/gate'; // The cookie checker
-import GateScreen from '../auth/components/gate-screen';
 
 interface LayoutProps {
     children: React.ReactNode;

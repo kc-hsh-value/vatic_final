@@ -73,3 +73,9 @@ so let me collect all the necessary information for this process.
 - finally we have to create the clob credentials 
 
 now this process is already working perfectly. HOWEVER, polymarket recently released a builder's program which allows us to use their relayer in order to aviod paying gas fees for the allowance signing, and it also tracks the volume we move to polymarket and shit like that. so since right now I am sponsoring the gas fee for signing transactions, I will probably try to integrate the relayer client as well. 
+
+
+
+# another idea
+We introduce a “market bundle” system that lets users group multiple prediction markets into a single, shareable page. Instead of linking individual markets one by one, users can generate a single URL that renders a clean, unified view of multiple related markets (e.g. “Election + Fed Rates + CPI”). This dramatically improves shareability on platforms like X, where only one link preview is shown, and allows users to tell a coherent market story in one snapshot. The page is optimized for mobile viewing, with a vertically stacked, swipe-friendly layout and a single Open Graph preview image representing the entire bundle. This turns market analysis into a social artifact—something that can be shared, discussed, and spread—rather than a collection of disconnected links.
+

@@ -17,7 +17,7 @@ import { useMemo, useState } from "react";
 import { polygon } from "viem/chains";
 
 import { Spinner } from "@/components/ui/spinner";
-import { useVaticUser } from "@/app/hooks/use-vatic-user";
+import { useVaticUser } from "@/app/(main)/hooks/use-vatic-user";
 import WithdrawDialog from "./withdraw-dialog";
 
 function shortAddr(addr?: string) {

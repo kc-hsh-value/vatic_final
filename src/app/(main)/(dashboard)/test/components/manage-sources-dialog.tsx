@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Trash2, Plus, Loader2, AtSign } from "lucide-react";
 import { toast } from "sonner";
 import { followAccount, getFollowedAccounts, unfollowAccount } from "../actions/account-actions";
-import { useVaticUser } from "@/app/hooks/use-vatic-user";
+import { useVaticUser } from "@/app/(main)/hooks/use-vatic-user";
 
 interface ManageSourcesDialogProps {
   open: boolean;

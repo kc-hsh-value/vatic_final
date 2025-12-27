@@ -10,13 +10,14 @@ import { toast } from "sonner";
 
 
 
-import { ensureOnchainAndClob } from "@/app/alphascope/actions/ensure-allowances-and-clob-credentials";
-import { getProvisioningStatus } from "@/app/alphascope/actions/get-provisioning-status";
 import { useVaticUserStore } from "@/state/use-vatic-store";
-import { getUSDCeBalanceByAddress } from "@/app/alphascope/actions/get-usdce-balance";
-import { getClobBalancesByAccessToken } from "@/app/alphascope/actions/get-clob-balances";
-import { getPolymarketTotalValue } from "@/app/alphascope/actions/get-total-value-of-positions";
-import { getSafeWallet } from "@/app/alphascope/actions/get-safe-wallet";
+import { getUSDCeBalanceByAddress } from "@/app/(main)/alphascope/actions/get-usdce-balance";
+import { getClobBalancesByAccessToken } from "@/app/(main)/alphascope/actions/get-clob-balances";
+import { getProvisioningStatus } from "@/app/(main)/alphascope/actions/get-provisioning-status";
+import { getSafeWallet } from "@/app/(main)/alphascope/actions/get-safe-wallet";
+import { getPolymarketTotalValue } from "@/app/(main)/alphascope/actions/get-total-value-of-positions";
+import { ensureOnchainAndClob } from "@/app/(main)/alphascope/actions/ensure-allowances-and-clob-credentials";
+
 
 /** TODO: implement these server actions to return numbers in USDC (6 decimals) */
 async function getUSDCBalance(_address: string): Promise<number> {

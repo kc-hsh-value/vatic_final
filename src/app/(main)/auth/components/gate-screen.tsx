@@ -2,11 +2,11 @@
 
 import React, { useState } from "react";
 import { toast } from "sonner";
-import { validateInviteCode, joinWaitlist } from "@/app/auth/actions/gate";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import { joinWaitlist, validateInviteCode } from "../actions/gate";
 
 interface GateScreenProps {
   onAccessGranted: () => void;

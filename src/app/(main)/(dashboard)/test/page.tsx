@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useVaticUser } from "@/app/hooks/use-vatic-user";
+import { useVaticUser } from "@/app/(main)/hooks/use-vatic-user";
 import { fetchFeed, FeedFilter } from "./actions/actions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { formatSlugToTitle } from "@/lib/utils";
-import { usePolymarketPrices } from "@/app/hooks/use-prices";
+import { usePolymarketPrices } from "@/app/(main)/hooks/use-prices";
 import { ManageSourcesDialog } from "./components/manage-sources-dialog";
 import { MediaEntity, TweetMedia } from "./components/tweet_media";
 

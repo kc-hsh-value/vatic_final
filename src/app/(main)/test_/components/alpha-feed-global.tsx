@@ -18,6 +18,8 @@ export default function GlobalFeedPage() {
     refetchInterval: 10000, // Poll every 10s
   });
 
+  console.log("feed: ", feed);
+
   // Client-side filtering
   const filteredFeed = feed?.filter((item: any) => item.max_urgency >= minUrgency) || [];
 
@@ -104,7 +106,7 @@ export default function GlobalFeedPage() {
                 <div className="flex gap-3 overflow-x-auto pb-2 pl-[52px] scrollbar-thin scrollbar-thumb-gray-800">
                   {item.related_markets.map((m: any) => (
                     <a 
-                      key={`${item.tweet_id}-${m.market_id}`}
+                      key={`${item.tweet_id}-${m.market_id}-${Math.random()}`}
                       // USING SLUG HERE with fallback to market_id if slug is missing
                       href={`https://polymarket.com/event/${m.slug || m.market_id}`}
                       target="_blank"

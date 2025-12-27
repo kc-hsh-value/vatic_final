@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ExternalLink, Flame, TrendingUp } from 'lucide-react'; // Lucide icons
-import { useVaticUser } from '@/app/hooks/use-vatic-user';
+import { useVaticUser } from '@/app/(main)/hooks/use-vatic-user';
 import { getAlphaFeedAction } from '../actions/vatic-data';
 
 

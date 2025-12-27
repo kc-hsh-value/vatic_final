@@ -1,8 +1,9 @@
+// app/layout.tsx
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
-import Providers from "@/providers/providers";
-import { Analytics } from "@vercel/analytics/next"
+// Remove Providers import from here
+import { Analytics } from "@vercel/analytics/next";
 
 const inter = localFont({
   src: "../../public/fonts/InterVariable.ttf",
@@ -31,10 +32,9 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${abcFavorit.variable} antialiased`}
       >
-        <Providers>
-          {children}
-          <Analytics />
-        </Providers>
+        {/* Analytics is usually fine globally, but Providers go to the inner layout */}
+        {children}
+        <Analytics />
       </body>
     </html>
   );

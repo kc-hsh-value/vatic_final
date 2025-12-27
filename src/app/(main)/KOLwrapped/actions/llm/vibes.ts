@@ -1,6 +1,6 @@
 "use server";
 
-import { getGeminiClient, getGeminiModelName } from "@/app/KOLwrapped/clients/gemini";
+import { getGeminiClient, getGeminiModelName } from "@/app/(main)/KOLwrapped/clients/gemini";
 import { z } from "zod";
 
 const VibesSchema = z.object({
@@ -86,7 +86,7 @@ const VIBE_LEXICON = [
   "settlement aware", "arb sniffing", "yes/no maximalist", "line shopper",
 
   // culture / aesthetic (tasteful)
-  "remilio-adjacent", "milady-coded", "terminal aesthetic", "clean edge",
+  "remilio-adjacent", "milady-coded", "clean edge",
   "dry cadence", "post-meme", "noisy but sharp", "low-emoji",
 ];
 
@@ -96,7 +96,7 @@ Date: late December 2025.
 
 Tone:
 - Crypto-native and enthusiastic (confident, celebratory).
-- Still tasteful: terminal / milady / remilio dry cadence.
+- Still tasteful: milady / remilio dry cadence.
 - Minimal emojis (0–2 total). No hashtags.
 - No insults, no harassment, no accusations.
 
@@ -118,11 +118,15 @@ Vibe lexicon:
 ${JSON.stringify(VIBE_LEXICON)}
 
 Core scoring / emphasis (IMPORTANT):
-1) If polymarket.linked === true and trading history exists => BIG signal (positive framing even if pnl low/negative).
+1) If polymarket.linked === true and trading history exists => BIG signal (positive framing even if pnl low/negative). If
+negative pnl, don't mention it's negative: focus on the fact that even participation in the markets is something 
+bold, courageous, and rare among KOLs. The pnl can be found in polymarket.overall.pnl. if it has (-) sign, it's negative e.g.
+-2500.
 2) If pnl is high OR rank strong => lean quant/math/edge ("Prediction Market Quant", "Probability Engineer", etc).
 3) If linked but pnl small/unknown => "active participant", "hands-on trader".
 4) BadgeLabel: recognized ones ok; unknown => generic.
 5) Analytical tweets => include ONE signal vibe.
+6) Avoid using the word "terminal" a lot.
 
 Constraints:
 - summary <=280, 1 sentence.
