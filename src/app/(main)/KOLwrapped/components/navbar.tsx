@@ -124,6 +124,12 @@ export default function WrappedNavbar() {
 
             {/* Ghost Navigation */}
             <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+              <Link href="/KOLwrapped" className="text-white/70 hover:text-white transition-colors">
+                KOL Wrapped
+              </Link>
+              <Link href="/KOLwrapped/leaderboard" className="text-white/70 hover:text-white transition-colors">
+                KOL Leaderboard
+              </Link>
               <DisabledLink>Markets</DisabledLink>
               <DisabledLink>Signals</DisabledLink>
               <DisabledLink>AlphaScope</DisabledLink>
