@@ -128,7 +128,10 @@ export default function WrappedNavbar() {
                 KOL Wrapped
               </Link>
               <Link href="/KOLwrapped/leaderboard" className="text-white/70 hover:text-white transition-colors">
-                KOL Leaderboard
+                Leaderboard
+              </Link>
+              <Link href="/KOLwrapped/badge-wars" className="text-white/70 hover:text-white transition-colors">
+                Badge Wars
               </Link>
               <DisabledLink>Markets</DisabledLink>
               <DisabledLink>Signals</DisabledLink>

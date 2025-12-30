@@ -19,6 +19,18 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const TOTAL_PM_TRADERS = 1_800_000;
+
+/**
+ * rank: 1 = best
+ * returns: percentile where 100 = best (top), 0 = worst (bottom)
+ */
+function rankToPercentile(rank?: number | null, total = TOTAL_PM_TRADERS) {
+  if (!rank || !Number.isFinite(rank) || rank <= 0) return null;
+  const p = (1 - (rank - 1) / (total - 1)) * 100;
+  return clamp(p);
+}
+
 // --- Logic Helpers (Unchanged) ---
 function fmtNumber(n?: number) {
   if (n == null || Number.isNaN(n)) return "—";
@@ -77,6 +89,7 @@ function computeSignalScore(args: {
   return clamp(Math.round(score));
 }
 
+
 function proxifyImg(url?: string | null, cacheKey?: string | null) {
   if (!url) return null;
   const v = cacheKey ? `&v=${encodeURIComponent(cacheKey)}` : "";
@@ -89,12 +102,25 @@ function BellCurve({
   percentile,
   avatarUrl,
   logoUrl,
+  leftLabel = "Noise",
+  rightLabel = "Signal",
+  accent = "#38bdf8", // default cyan
+  fillTop = "rgba(56, 189, 248, 0.20)",
+  fillBottom = "rgba(56, 189, 248, 0)",
+  markerBorder = "#38bdf8",
 }: {
   percentile: number;
   avatarUrl?: string | null;
   logoUrl?: string | null;
+  leftLabel?: string;
+  rightLabel?: string;
+  accent?: string;
+  fillTop?: string;
+  fillBottom?: string;
+  markerBorder?: string;
 }) {
   const x = (percentile / 100) * 320;
+  const gradId = useMemo(() => `curveGradient-${Math.random().toString(16).slice(2)}`, []);
 
   return (
     <div className="relative w-full select-none" style={{ height: 100 }}>
@@ -109,19 +135,19 @@ function BellCurve({
 
       <svg width="100%" height="100" viewBox="0 0 320 90" className="relative z-10 block overflow-visible" preserveAspectRatio="none">
         <defs>
-          <linearGradient id="curveGradient" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="rgba(56, 189, 248, 0.2)" />
-            <stop offset="100%" stopColor="rgba(56, 189, 248, 0)" />
+          <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={fillTop} />
+            <stop offset="100%" stopColor={fillBottom} />
           </linearGradient>
         </defs>
 
         <path d="M0 80 H320" stroke="rgba(255,255,255,0.1)" strokeWidth="1" fill="none" />
         <path
           d="M0 80 C40 80, 60 76, 80 62 C100 50, 120 28, 160 12 C200 28, 220 50, 240 62 C260 76, 280 80, 320 80"
-          stroke="#38bdf8"
+          stroke={accent}
           strokeWidth="2"
-          fill="url(#curveGradient)"
-          style={{ filter: "drop-shadow(0 0 8px rgba(56, 189, 248, 0.3))" }}
+          fill={`url(#${gradId})`}
+          style={{ filter: `drop-shadow(0 0 8px ${accent}55)` }}
         />
         <line x1={x} y1="12" x2={x} y2="80" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5" strokeDasharray="4 2" />
       </svg>
@@ -136,7 +162,7 @@ function BellCurve({
           borderRadius: 999,
           padding: 2,
           background: "#09090b",
-          border: "1px solid #38bdf8",
+          border: `1px solid ${markerBorder}`,
         }}
       >
         {avatarUrl ? (
@@ -146,8 +172,8 @@ function BellCurve({
       </div>
 
       <div className="flex justify-between text-[10px] uppercase tracking-wider font-semibold text-zinc-500 mt-[-6px] px-1 relative z-10">
-        <span>Noise</span>
-        <span>Signal</span>
+        <span>{leftLabel}</span>
+        <span>{rightLabel}</span>
       </div>
     </div>
   );
@@ -175,6 +201,7 @@ function WrappedView({
   const isMobileExport = mode === "mobile";
   const isDesktopExport = mode === "desktop";
   
+  
   // Base classes
   const cardBaseClass = "relative bg-zinc-900/40 border border-white/10 rounded-2xl overflow-hidden";
   const miniStatClass = "flex flex-col p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]";
@@ -189,6 +216,11 @@ function WrappedView({
     isDesktopExport ? "w-full p-12" : "",
     mode === "responsive" ? "w-full max-w-[1080px] p-4 md:p-8 lg:p-12 rounded-3xl border border-white/5" : ""
   );
+
+  const traderPercentile = useMemo(() => {
+    const rank = pm?.overall?.rank;
+    return rankToPercentile(rank != null ? Number(rank) : null);
+  }, [pm?.overall?.rank]);
 
   return (
     <div className={containerClass}>
@@ -363,6 +395,30 @@ function WrappedView({
               </div>
               <div className="text-xs font-mono px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">Rank #{pm.overall?.rank ?? "—"}</div>
             </div>
+
+            
+            {/* Trader Percentile */}
+            {traderPercentile != null && traderPercentile>65 && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-3">
+                  Trader Percentile (Rank-based)
+                </div>
+                <BellCurve
+                  percentile={traderPercentile}
+                  avatarUrl={proxifyImg(profile?.profilePicture ?? null, imgCacheKey)}
+                  logoUrl="/logo.png"
+                  leftLabel="Retail"
+                  rightLabel="Whale"
+                  accent="#22c55e"
+                  markerBorder="#22c55e"
+                  fillTop="rgba(34, 197, 94, 0.18)"
+                  fillBottom="rgba(34, 197, 94, 0)"
+                />
+                {/* <div className="mt-2 text-[11px] text-zinc-500 font-mono">
+                  Rank #{pm.overall?.rank ?? "—"} / {TOTAL_PM_TRADERS.toLocaleString()}
+                </div> */}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               {[
@@ -610,7 +666,12 @@ export default function KolWrappedPage() {
   const pm = data?.polymarket;
 
   const topTweets = useMemo(() => pickTopTweetsByLikes(tweets, 2), [tweets]);
-  const signal = useMemo(() => computeSignalScore({ tweets, polymarket: pm }), [tweets, pm]);
+  // const signal = useMemo(() => computeSignalScore({ tweets, polymarket: pm }), [tweets, pm]);
+  const signal = useMemo(
+    () => computeSignalScore({ tweets, polymarket: pm }),
+    [tweets, pm]
+  );
+  
   const imgCacheKey = data ? `${data.input.xUsername}-${data.debug.fetchedAtIso}` : "";
 
   return (
@@ -620,7 +681,7 @@ export default function KolWrappedPage() {
         <div className="flex items-center gap-3 mb-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="" className="w-8 h-8 rounded-lg opacity-90" />
-          <h1 className="text-2xl font-bold tracking-tight">KOL Wrapped</h1>
+          <h1 className="text-2xl font-bold tracking-tight">KOL Wrapped 2025</h1>
         </div>
 
         <form onSubmit={onSubmit} className="flex gap-3 mb-4">

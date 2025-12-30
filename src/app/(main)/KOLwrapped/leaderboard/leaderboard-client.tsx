@@ -137,6 +137,20 @@ export default function LeaderboardClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, period]); // searching should respect the current period ordering
 
+
+// 🔥 sync query from parent (badge hover/pin)
+useEffect(() => {
+  setQ(initialQuery);
+  load({ q: initialQuery, offset: 0 });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [initialQuery]);
+
+// 🔥 sync period from parent (badge wars period buttons)
+useEffect(() => {
+  setPeriod(initialPeriod);
+  load({ period: initialPeriod, offset: 0, q });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [initialPeriod]);
 //   const canPrev = offset > 0;
 //   const canNext = offset + limit < total;
 const canPrev = offset > 0;

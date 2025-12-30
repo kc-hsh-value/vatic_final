@@ -2,6 +2,8 @@
 import LeaderboardClient from "./leaderboard-client";
 import { getLeaderboard } from "./actions";
 import type { LeaderboardPeriod } from "./actions";
+import { getBadgeWars } from "./badge-wars/actions";
+import BadgeWarsClient from "./badge-wars/badge-wars-client";
 
 export default async function LeaderboardPage() {
   const initialPeriod: LeaderboardPeriod = "all";
@@ -15,6 +17,9 @@ export default async function LeaderboardPage() {
     offset: initialOffset,
     q: initialQuery,
   });
+
+  const badgeWarsInitial = await getBadgeWars({ period: initialPeriod, limit: 24, offset: 0 });
+
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center py-12 px-4 font-sans selection:bg-indigo-500/30">
@@ -35,6 +40,7 @@ export default async function LeaderboardPage() {
           initialRows={rows ?? []}
           initialCount={count ?? 0}
         />
+        {/* <BadgeWarsClient initialPeriod={initialPeriod} initialRows={badgeWarsInitial ?? []} /> */}
       </div>
     </main>
   );
