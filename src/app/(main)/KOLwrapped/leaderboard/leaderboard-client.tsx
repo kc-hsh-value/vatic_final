@@ -1,7 +1,7 @@
-// KOLwrapped/leaderboard/LeaderboardClient.tsx (your file)
+// KOLwrapped/leaderboard/LeaderboardClient.tsx
 "use client";
 
-import { useMemo, useState, useTransition, useEffect } from "react";
+import { useMemo, useState, useTransition, useEffect, useCallback } from "react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
@@ -78,7 +78,11 @@ export default function LeaderboardClient({
   const [offset, setOffset] = useState(initialOffset);
   const [total, setTotal] = useState(initialCount);
 
+  // applied query (used for fetching)
   const [q, setQ] = useState(initialQuery);
+  // draft query (user typing)
+  const [draftQ, setDraftQ] = useState(initialQuery);
+
   const [isPending, startTransition] = useTransition();
 
   const cacheKey = useMemo(() => `${period}-${offset}-${q}`, [period, offset, q]);
@@ -103,17 +107,18 @@ export default function LeaderboardClient({
 
   const showDailyDeltas = period === "daily";
 
-  async function load(next: { period?: LeaderboardPeriod; offset?: number; q?: string }) {
-    const nextPeriod = next.period ?? period;
-    const nextOffset = next.offset ?? offset;
-    const nextQ = next.q ?? q;
+  const load = useCallback(
+    async (next: { period?: LeaderboardPeriod; offset?: number; q?: string }) => {
+      const nextPeriod = next.period ?? period;
+      const nextOffset = next.offset ?? offset;
+      const nextQ = next.q ?? q;
 
-    startTransition(async () => {
+      startTransition(async () => {
         const res = await getLeaderboard({
-        period: nextPeriod,
-        limit,
-        offset: nextOffset,
-        q: nextQ,
+          period: nextPeriod,
+          limit,
+          offset: nextOffset,
+          q: nextQ,
         });
 
         const nextRows = (res?.rows ?? []) as LeaderboardRow[];
@@ -124,39 +129,40 @@ export default function LeaderboardClient({
         setPeriod(nextPeriod);
         setOffset(nextOffset);
         setQ(nextQ);
-    });
-    }
+      });
+    },
+    [period, offset, q, limit, startTransition]
+  );
 
-  // Optional: debounce search so you don't spam queries
+  const submitSearch = useCallback(() => {
+    const nextQ = draftQ.trim();
+    load({ q: nextQ, offset: 0 });
+  }, [draftQ, load]);
+
+  const clearSearch = useCallback(() => {
+    setDraftQ("");
+    load({ q: "", offset: 0 });
+  }, [load]);
+
+  // 🔥 sync query from parent (badge hover/pin)
   useEffect(() => {
-    const t = setTimeout(() => {
-      // when q changes, restart at page 1
-      load({ q, offset: 0 });
-    }, 250);
-    return () => clearTimeout(t);
+    setDraftQ(initialQuery);
+    load({ q: initialQuery, offset: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, period]); // searching should respect the current period ordering
+  }, [initialQuery]);
 
+  // 🔥 sync period from parent (badge wars period buttons)
+  useEffect(() => {
+    load({ period: initialPeriod, offset: 0, q });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPeriod]);
 
-// 🔥 sync query from parent (badge hover/pin)
-useEffect(() => {
-  setQ(initialQuery);
-  load({ q: initialQuery, offset: 0 });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [initialQuery]);
+  const canPrev = offset > 0;
+  const canNext = offset + limit < total;
 
-// 🔥 sync period from parent (badge wars period buttons)
-useEffect(() => {
-  setPeriod(initialPeriod);
-  load({ period: initialPeriod, offset: 0, q });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [initialPeriod]);
-//   const canPrev = offset > 0;
-//   const canNext = offset + limit < total;
-const canPrev = offset > 0;
-const canNext = offset + limit < total;
-
-  const colCount = showDailyDeltas ? 6 : 4;
+  // ✅ you have 5 visible columns in non-daily mode (rank, kol, pnl, followers, wallet)
+  // ✅ and 7 in daily mode (adds 2 deltas)
+  const colCount = showDailyDeltas ? 7 : 5;
 
   return (
     <div className="w-full">
@@ -171,7 +177,7 @@ const canNext = offset + limit < total;
                 key={p.key}
                 type="button"
                 variant="outline"
-                onClick={() => load({ period: p.key, offset: 0 })}
+                onClick={() => load({ period: p.key, offset: 0, q })}
                 disabled={isPending}
                 className={cn(
                   "h-10 px-4 rounded-xl border text-sm",
@@ -187,15 +193,40 @@ const canNext = offset + limit < total;
         </div>
 
         {/* Search */}
-        <div className="md:ml-auto w-full md:w-[360px]">
+        <div className="md:ml-auto w-full md:w-[440px]">
           <div className="flex items-center gap-2 px-3 h-10 rounded-xl bg-zinc-900 border border-zinc-800 focus-within:ring-2 focus-within:ring-indigo-500/40 focus-within:border-indigo-500/50 transition-all">
             <Search className="w-4 h-4 text-zinc-500" />
             <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
+              value={draftQ}
+              onChange={(e) => setDraftQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitSearch();
+              }}
               placeholder="Search username or name..."
               className="w-full bg-transparent outline-none text-sm placeholder:text-zinc-600"
             />
+
+            {draftQ.length > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={clearSearch}
+                disabled={isPending}
+                className="h-8 px-3 rounded-lg bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-800"
+              >
+                Clear
+              </Button>
+            ) : null}
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={submitSearch}
+              disabled={isPending}
+              className="h-8 px-3 rounded-lg bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-800"
+            >
+              Search
+            </Button>
           </div>
         </div>
       </div>
@@ -247,11 +278,9 @@ const canNext = offset + limit < total;
               ) : (
                 rows.map((r, idx) => {
                   const pnl = valueForPeriod(r);
-                //   const rank = offset + idx + 1;
-                    const rank = r.global_rank ?? (offset + idx + 1);
+                  const rank = r.global_rank ?? offset + idx + 1;
 
                   const pnlDelta = showDailyDeltas ? (r.pnl_change_24h ?? null) : null;
-
                   const rankDelta = showDailyDeltas ? (r.rank_change_24h ?? null) : null;
 
                   const avatar = proxifyImg(r.x_profile_image_url, cacheKey);
@@ -313,9 +342,7 @@ const canNext = offset + limit < total;
                         </>
                       ) : null}
 
-                      <td className="px-5 py-4 text-right text-sm text-zinc-300 font-mono">
-                        {fmtNumber(r.x_followers)}
-                      </td>
+                      <td className="px-5 py-4 text-right text-sm text-zinc-300 font-mono">{fmtNumber(r.x_followers)}</td>
 
                       <td className="px-5 py-4 text-right text-xs text-zinc-500 font-mono">{walletShort}</td>
                     </tr>
@@ -336,7 +363,7 @@ const canNext = offset + limit < total;
             <Button
               type="button"
               variant="outline"
-              onClick={() => load({ offset: Math.max(0, offset - limit) })}
+              onClick={() => load({ offset: Math.max(0, offset - limit), q })}
               disabled={isPending || !canPrev}
               className="h-9 px-3 rounded-xl bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
             >
@@ -346,7 +373,7 @@ const canNext = offset + limit < total;
             <Button
               type="button"
               variant="outline"
-              onClick={() => load({ offset: offset + limit })}
+              onClick={() => load({ offset: offset + limit, q })}
               disabled={isPending || !canNext}
               className="h-9 px-3 rounded-xl bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
             >
