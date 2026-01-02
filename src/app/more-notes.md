@@ -135,3 +135,13 @@ fetch('https://data-api.polymarket.com/activity?limit=20&sortBy=TIMESTAMP&sortDi
 ```
 
 can also sort it by tokens and cash which isn't available on the polymarket UI 
+
+
+
+## pnl number 
+https://data-api.polymarket.com/v1/leaderboard?timePeriod=all&user=0xe25b9180f5687aa85bd94ee309bb72a464320f1b&category=overall
+
+## pnl over time 
+```
+https://user-pnl-api.polymarket.com/user-pnl?user_address=0x46bdb2025015fd8d467db9a4a73a264051d851ca&interval=1m&fidelity=1d
+```

@@ -4,11 +4,12 @@
 import { useMemo, useState, useTransition, useEffect, useCallback } from "react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, X, XIcon, XSquare } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { getLeaderboard, type LeaderboardPeriod } from "./actions";
 import type { LeaderboardRow } from "./types";
+import Link from "next/link";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -310,6 +311,21 @@ export default function LeaderboardClient({
                             <div className="flex items-center gap-2 min-w-0">
                               <div className="truncate font-semibold text-zinc-200 text-sm">{display}</div>
 
+                              {/* here we need an X (ex twitter) Icon which will be a _blank link to the corresponding x account */}
+                              <Link 
+                                href={`https://x.com/${r.x_username}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-white/10 transition-colors group"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img 
+                                  src="/x.svg" 
+                                  alt="X" 
+                                  className="w-3.5 h-3.5 brightness-0 invert opacity-50 group-hover:opacity-100 transition-opacity" 
+                                />
+                              </Link>
+
                               {r.x_badge_label ? (
                                 <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-white/5 border border-white/10 text-zinc-300 max-w-[240px]">
                                   {badgeIcon ? (
@@ -393,4 +409,4 @@ export default function LeaderboardClient({
       </div>
     </div>
   );
-}
+} 

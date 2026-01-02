@@ -32,7 +32,7 @@ export async function saveWrappedCache(args: {
         ttl_seconds: args.ttlSeconds,
         updated_at: nowIso,
         // on insert these will be used; on conflict we override with update below via "merge" rules
-        hit_count: 1,
+        // hit_count: 1,
         last_hit_at: nowIso,
       },
       { onConflict: "x_username" }

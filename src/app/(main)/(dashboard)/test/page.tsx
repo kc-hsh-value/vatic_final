@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useVaticUser } from "@/app/(main)/hooks/use-vatic-user";
-import { fetchFeed, FeedFilter } from "./actions/actions";
+import { fetchFeed, FeedFilter, fetchFeedV3 } from "./actions/actions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,9 @@ type TweetCorrelation = {
   markets: Market[];
    media_info: MediaEntity[];
 };
+type FeedCursor = { time: string; id: string } | null;
+
+
 
 function cleanTweetText(text: string, media: MediaEntity[] | null) {
   if (!media || !text) return text;
@@ -63,27 +66,69 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [cursor, setCursor] = useState<FeedCursor>(null);
   
   // Manage Sources Modal State
   const [manageOpen, setManageOpen] = useState(false);
 
+  // useEffect(() => {
+  //   if (!auth.authenticated || !auth.userId) return;
+  //   loadFeed(true);
+  // }, [auth.authenticated, auth.userId, activeTab]);
+
   useEffect(() => {
     if (!auth.authenticated || !auth.userId) return;
+    setCursor(null);
+    setHasMore(true);
     loadFeed(true);
   }, [auth.authenticated, auth.userId, activeTab]);
 
+  // const loadFeed = async (reset = false) => {
+  //   console.log("Loading feed...", { reset, page, activeTab });
+  //   if (!auth.userId) return;
+  //   // console.log("user exists to load the feed")
+    
+  //   if(reset) setLoading(true);
+  //   // console.log("Loading feed with parameters:", { reset, page, activeTab });
+  //   const currentPage = reset ? 0 : page;
+    
+  //   const res = await fetchFeed(auth.userId, activeTab, currentPage);
+  //   // console.log("Feed loaded:", res);
+    
+  //   if (!res.success) {
+  //     toast.error("Failed to load feed");
+  //     setLoading(false);
+  //     return;
+  //   }
+
+  //   const newItems = res.data as TweetCorrelation[];
+
+  //   if (reset) {
+  //     setItems(newItems);
+  //     setPage(1);
+  //   } else {
+  //     setItems((prev) => {
+  //       const existingIds = new Set(prev.map((item) => item.tweet_id));
+  //       const uniqueNew = newItems.filter((item) => !existingIds.has(item.tweet_id));
+  //       return [...prev, ...uniqueNew];
+  //     });
+  //     setPage((prev) => prev + 1);
+  //   }
+
+  //   if (newItems.length < 20) setHasMore(false);
+  //   else setHasMore(true);
+    
+  //   setLoading(false);
+  // };
   const loadFeed = async (reset = false) => {
-    console.log("Loading feed...", { reset, page, activeTab });
     if (!auth.userId) return;
-    // console.log("user exists to load the feed")
-    
-    if(reset) setLoading(true);
-    // console.log("Loading feed with parameters:", { reset, page, activeTab });
-    const currentPage = reset ? 0 : page;
-    
-    const res = await fetchFeed(auth.userId, activeTab, currentPage);
-    // console.log("Feed loaded:", res);
-    
+
+    if (reset) setLoading(true);
+
+    const effectiveCursor = reset ? null : cursor;
+
+    const res = await fetchFeedV3(auth.userId, activeTab, effectiveCursor, 20);
+
     if (!res.success) {
       toast.error("Failed to load feed");
       setLoading(false);
@@ -94,19 +139,21 @@ export default function FeedPage() {
 
     if (reset) {
       setItems(newItems);
-      setPage(1);
     } else {
       setItems((prev) => {
         const existingIds = new Set(prev.map((item) => item.tweet_id));
         const uniqueNew = newItems.filter((item) => !existingIds.has(item.tweet_id));
         return [...prev, ...uniqueNew];
       });
-      setPage((prev) => prev + 1);
     }
 
-    if (newItems.length < 20) setHasMore(false);
-    else setHasMore(true);
-    
+    // Update cursor to the *last item in the newly fetched page*
+    if (newItems.length > 0) {
+      const last = newItems[newItems.length - 1];
+      setCursor({ time: last.published_at, id: last.tweet_id });
+    }
+
+    setHasMore(newItems.length === 20);
     setLoading(false);
   };
 
