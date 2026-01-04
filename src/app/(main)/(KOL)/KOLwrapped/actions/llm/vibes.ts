@@ -1,6 +1,6 @@
 "use server";
 
-import { getGeminiClient, getGeminiModelName } from "@/app/(main)/KOLwrapped/clients/gemini";
+import { getGeminiClient, getGeminiModelName } from "@/app/(main)/(KOL)/KOLwrapped/clients/gemini";
 import { z } from "zod";
 
 const VibesSchema = z.object({

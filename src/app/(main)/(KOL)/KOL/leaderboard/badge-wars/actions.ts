@@ -2,6 +2,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { LeaderboardPeriod } from "../actions";
+import { unstable_cache } from "next/cache";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,9 +16,9 @@ export type BadgeWarRow = {
   pnl_sum: number;
 };
 
-export async function getBadgeWars({
+async function getBadgeWarsUncached({
   period = "all",
-  limit = 24, // good default for charts
+  limit = 24,
   offset = 0,
 }: {
   period?: LeaderboardPeriod;
@@ -36,4 +37,25 @@ export async function getBadgeWars({
   }
 
   return (data ?? []) as BadgeWarRow[];
+}
+
+export async function getBadgeWars({
+  period = "all",
+  limit = 24,
+  offset = 0,
+}: {
+  period?: LeaderboardPeriod;
+  limit?: number;
+  offset?: number;
+}) {
+  const getCached = unstable_cache(
+    async () => getBadgeWarsUncached({ period, limit, offset }),
+    [`badge-wars-${period}-${limit}-${offset}`],
+    {
+      revalidate: 180, // 3 minutes
+      tags: ["badge-wars", `badge-wars-${period}`],
+    }
+  );
+
+  return getCached();
 }

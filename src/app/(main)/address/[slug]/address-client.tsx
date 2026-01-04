@@ -384,10 +384,17 @@ export default function AddressClient({
         {/* Page header */}
         <div className="flex items-center gap-3 mb-6">
           <img src="/logo.png" alt="" className="w-8 h-8 rounded-lg opacity-90" />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="text-lg font-semibold text-zinc-200 truncate">Account</div>
             <div className="text-xs text-zinc-500 font-mono truncate">{address}</div>
           </div>
+          <Button 
+            variant="outline" 
+            className="bg-zinc-950 border-white/10 hover:bg-zinc-800 text-zinc-200 rounded-none"
+            onClick={() => toast.success("Copytrade feature coming soon!")}
+          >
+            copytrade
+          </Button>
         </div>
 
         {/* Top grid */}
@@ -432,6 +439,10 @@ export default function AddressClient({
                         )}
                       </div>
                     ))}
+                    <Link href="/KOLwrapped" className="flex items-center gap-2 px-4 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 border border-indigo-500/20 transition-all">
+                      <Gift className="w-4 h-4 text-white" />
+                      <span className="text-xs text-white font-semibold whitespace-nowrap">Get KOL Wrapped 2025</span>
+                    </Link>
                   </div>
                 )}
               </div>

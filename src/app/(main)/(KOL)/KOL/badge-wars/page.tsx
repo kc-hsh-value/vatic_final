@@ -1,8 +1,9 @@
 // KOLwrapped/leaderboard/page.tsx
 
-import { getLeaderboard, LeaderboardPeriod } from "../leaderboard/actions";
-import { getBadgeWars } from "../leaderboard/badge-wars/actions";
-import BadgeWarsClient from "../leaderboard/badge-wars/badge-wars-client";
+import { Suspense } from "react";
+import { getLeaderboard, LeaderboardPeriod } from "../../KOL/leaderboard/actions";
+import { getBadgeWars } from "../../KOL/leaderboard/badge-wars/actions";
+import BadgeWarsClient from "../../KOL/leaderboard/badge-wars/badge-wars-client";
 
 export default async function LeaderboardPage() {
   const initialPeriod: LeaderboardPeriod = "all";
@@ -23,7 +24,9 @@ export default async function LeaderboardPage() {
             <p className="text-zinc-500 text-sm mt-1">Cumulative PnL of badge traders</p>
           </div>
         </div>
-        <BadgeWarsClient initialPeriod={initialPeriod} initialRows={badgeWarsInitial ?? []} />
+        <Suspense fallback={<div className="text-center text-zinc-500">Loading...</div>}>
+          <BadgeWarsClient initialPeriod={initialPeriod} initialRows={badgeWarsInitial ?? []} />
+        </Suspense>
       </div>
     </main>
   );

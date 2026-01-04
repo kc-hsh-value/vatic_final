@@ -1,5 +1,5 @@
 import React from 'react'
-import WrappedNavbar from '../(KOL)/KOLwrapped/components/navbar';
+import WrappedNavbar from '../KOLwrapped/components/navbar';
 
 interface Props {
     children: React.ReactNode;

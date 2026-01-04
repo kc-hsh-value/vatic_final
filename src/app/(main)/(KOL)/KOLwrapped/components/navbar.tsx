@@ -24,7 +24,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
-import { joinWaitlist } from "../../auth/actions/gate";
+import { joinWaitlist } from "../../../auth/actions/gate";
 
 // --- Waitlist Form Component (Internal) ---
 function WaitlistForm({ onSuccess }: { onSuccess: () => void }) {
@@ -116,8 +116,8 @@ export default function WrappedNavbar() {
 
   const navItems = [
     { label: "KOL Wrapped", href: "/KOLwrapped", disabled: false },
-    { label: "Leaderboard", href: "/KOLwrapped/leaderboard", disabled: false },
-    { label: "Badge Wars", href: "/KOLwrapped/badge-wars", disabled: false },
+    { label: "Leaderboard", href: "/KOL/leaderboard", disabled: false },
+    { label: "Badge Wars", href: "/KOL/badge-wars", disabled: false },
     { label: "Markets", href: "#", disabled: true },
     { label: "Signals", href: "#", disabled: true },
     { label: "AlphaScope", href: "#", disabled: true },
