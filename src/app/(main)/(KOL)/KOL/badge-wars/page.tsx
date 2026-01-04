@@ -24,7 +24,7 @@ export default async function LeaderboardPage() {
             <p className="text-zinc-500 text-sm mt-1">Cumulative PnL of badge traders</p>
           </div>
         </div>
-        <Suspense fallback={<div className="text-center text-zinc-500">Loading...</div>}>
+        <Suspense fallback={null}>
           <BadgeWarsClient initialPeriod={initialPeriod} initialRows={badgeWarsInitial ?? []} />
         </Suspense>
       </div>
