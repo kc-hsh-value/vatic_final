@@ -22,6 +22,7 @@ export interface Correlation {
   urgency_score: number;
   created_at_utc: string; // Time of correlation (when our system detected it)
   tweet: Tweet;
+  published_at: string; // Time of the tweet publication
 }
 
 // The Data Structure for fast lookups

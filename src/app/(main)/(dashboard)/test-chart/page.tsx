@@ -40,6 +40,7 @@ type NewsItem = {
   created_at_utc: string;
   best: Correlation;
   marketIds: string[];
+  published_at: string;
 };
 
 // ----- helpers -----
@@ -478,7 +479,8 @@ export default function TestPage() {
 
     async function init() {
       // const raw = await fetchEventData("who-will-trump-nominate-as-fed-chair");
-      const raw = await fetchEventData("who-will-be-the-first-to-leave-the-trump-cabinet");
+      // const raw = await fetchEventData("who-will-be-the-first-to-leave-the-trump-cabinet");
+      const raw = await fetchEventData("maduro-out-in-2025");
       if (!raw || cancelled) return;
 
       const clean = normalizeEvent([raw]);
@@ -747,7 +749,7 @@ export default function TestPage() {
   // Dedup tweets across multiple correlations
   const newsItems = useMemo<NewsItem[]>(() => {
     const map = new Map<string, NewsItem>();
-
+    console.log("newsrows: ", newsRows);  
     for (const c of newsRows) {
       const tweetId = c.tweet?.id;
       if (!tweetId) continue;
@@ -759,6 +761,7 @@ export default function TestPage() {
           tweetId,
           tweet: c.tweet,
           created_at_utc: c.created_at_utc,
+          published_at: c.tweet.published_at,
           best: c,
           marketIds: [c.market_id],
         });
@@ -767,8 +770,11 @@ export default function TestPage() {
 
       if (!existing.marketIds.includes(c.market_id)) existing.marketIds.push(c.market_id);
 
-      if (new Date(c.created_at_utc).getTime() > new Date(existing.created_at_utc).getTime()) {
-        existing.created_at_utc = c.created_at_utc;
+      // if (new Date(c.created_at_utc).getTime() > new Date(existing.created_at_utc).getTime()) {
+      //   existing.created_at_utc = c.created_at_utc;
+      // }
+      if (new Date(c.tweet.published_at).getTime() > new Date(existing.tweet.published_at).getTime()) {
+        existing.tweet.published_at = c.tweet.published_at;
       }
 
       if ((c.relevance_score ?? 0) > (existing.best.relevance_score ?? 0)) {
@@ -777,7 +783,8 @@ export default function TestPage() {
     }
 
     return Array.from(map.values()).sort(
-      (a, b) => new Date(b.created_at_utc).getTime() - new Date(a.created_at_utc).getTime()
+      // (a, b) => new Date(b.created_at_utc).getTime() - new Date(a.created_at_utc).getTime()
+      (a, b) => new Date(b.tweet.published_at).getTime() - new Date(a.tweet.published_at).getTime()
     );
   }, [newsRows]);
 
@@ -808,7 +815,8 @@ export default function TestPage() {
     const byTime = new Map<number, { count: number; top: NewsItem }>();
 
     for (const item of newsItems) {
-      const tSec = parseUtcToSec(item.created_at_utc);
+      // const tSec = parseUtcToSec(item.created_at_utc);
+      const tSec = parseUtcToSec(item.tweet.published_at);
       if (tSec == null) continue;
 
       const snapped = snapToNearestSeriesTime(expandedHistory, tSec);
@@ -1453,7 +1461,8 @@ export default function TestPage() {
                   const onEnter = () => {
                     console.log("hover news item: ", item);
                     if (!expandedMarketId || activeTab !== "CHART") return;
-                    const tSec = parseUtcToSec(item.created_at_utc);
+                    // const tSec = parseUtcToSec(item.created_at_utc);
+                    const tSec = parseUtcToSec(item.tweet.published_at);
                     if (tSec == null) return;
 
                     // ✅ critical: snap tweet time to actual series time
@@ -1492,7 +1501,8 @@ export default function TestPage() {
                         <div className="flex justify-between items-start">
                           <div>
                             <p className="text-xs font-bold text-gray-300">{c.tweet.author_name}</p>
-                            <p className="text-[10px] text-gray-600">{new Date(c.created_at_utc).toLocaleString()}</p>
+                            <p className="text-[10px] text-gray-600">correlation created: {new Date(c.created_at_utc).toLocaleString()}</p>
+                            <p className="text-[10px] text-gray-600">tweet posted: {new Date(c.tweet.published_at).toLocaleString()}</p>
                           </div>
 
                           <div

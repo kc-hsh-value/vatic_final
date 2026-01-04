@@ -29,7 +29,10 @@ export async function validateInviteCode(code: string) {
   // Mark used (Burn it)
   const { error: updateError } = await supabaseAdmin
     .from("invite_codes")
-    .update({ is_used: true, used_at: new Date().toISOString() })
+    .update({ 
+      // is_used: true, 
+      used_at: new Date().toISOString() 
+    })
     .eq("code", cleanCode);
 
   if (updateError) {

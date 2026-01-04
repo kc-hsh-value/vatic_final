@@ -9,7 +9,7 @@ and we click on positions and active and sort by "value" it's essentially this r
 ```
 const options = {method: 'GET'};
 
-fetch('https://data-api.polymarket.com/positions?sizeThreshold=0&limit=500&sortBy=INITIAL&sortDirection=DESC&user=0x6ca3bbd21ece8efe616738d04c5664f746be590f&offset=0', options)
+fetch('https://data-api.polymarket.com/positions?sizeThreshold=0&limit=500&sortBy=CURRENT&sortDirection=DESC&user=0x6ca3bbd21ece8efe616738d04c5664f746be590f&offset=0', options)
   .then(res => res.json())
   .then(res => console.log(res))
   .catch(err => console.error(err));

@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { getLeaderboard, type LeaderboardPeriod } from "./actions";
 import type { LeaderboardRow } from "./types";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -101,6 +103,30 @@ export default function LeaderboardClient({
     }
   }, [period]);
 
+  // url search param 
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const setUrl = useCallback(
+    (next: { period?: LeaderboardPeriod; offset?: number; q?: string }) => {
+      const nextPeriod = next.period ?? period;
+      const nextOffset = next.offset ?? offset;
+      const nextQ = next.q ?? q;
+
+      const params = new URLSearchParams(searchParams?.toString());
+
+      params.set("period", nextPeriod);
+      params.set("offset", String(nextOffset));
+      params.set("limit", String(limit));
+
+      if (nextQ && nextQ.trim().length > 0) params.set("q", nextQ.trim());
+      else params.delete("q");
+
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams, period, offset, q, limit]
+  );
+
   function valueForPeriod(r: LeaderboardRow) {
     const v = (r as any)[periodColumn] as number | null | undefined;
     return v ?? null;
@@ -113,6 +139,9 @@ export default function LeaderboardClient({
       const nextPeriod = next.period ?? period;
       const nextOffset = next.offset ?? offset;
       const nextQ = next.q ?? q;
+
+      // ✅ keep URL synced
+      setUrl({ period: nextPeriod, offset: nextOffset, q: nextQ });
 
       startTransition(async () => {
         const res = await getLeaderboard({
@@ -132,8 +161,35 @@ export default function LeaderboardClient({
         setQ(nextQ);
       });
     },
-    [period, offset, q, limit, startTransition]
+    [period, offset, q, limit, startTransition, setUrl]
   );
+
+  // const load = useCallback(
+  //   async (next: { period?: LeaderboardPeriod; offset?: number; q?: string }) => {
+  //     const nextPeriod = next.period ?? period;
+  //     const nextOffset = next.offset ?? offset;
+  //     const nextQ = next.q ?? q;
+
+  //     startTransition(async () => {
+  //       const res = await getLeaderboard({
+  //         period: nextPeriod,
+  //         limit,
+  //         offset: nextOffset,
+  //         q: nextQ,
+  //       });
+
+  //       const nextRows = (res?.rows ?? []) as LeaderboardRow[];
+
+  //       setRows(nextRows);
+  //       setTotal(res?.count ?? 0);
+
+  //       setPeriod(nextPeriod);
+  //       setOffset(nextOffset);
+  //       setQ(nextQ);
+  //     });
+  //   },
+  //   [period, offset, q, limit, startTransition]
+  // );
 
   const submitSearch = useCallback(() => {
     const nextQ = draftQ.trim();
@@ -288,6 +344,7 @@ export default function LeaderboardClient({
                   const badgeIcon = proxifyImg(r.x_badge_icon_url, cacheKey);
 
                   const display = r.x_display_name || (r.x_username ? `@${r.x_username}` : "Unknown");
+                  const addressUrl = `/address/${encodeURIComponent(r.polymarket_address ?? "")}`;
                   const handle = r.x_username ? `@${r.x_username}` : "—";
 
                   const wallet = r.polymarket_address ?? "";
@@ -303,13 +360,17 @@ export default function LeaderboardClient({
                           <div className="h-10 w-10 rounded-xl overflow-hidden bg-zinc-800 border border-white/10 shrink-0">
                             {avatar ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={avatar} alt="" className="h-full w-full object-cover" />
+                              <Image src={avatar} alt="" width={40} height={40} className="h-full w-full object-cover" />
                             ) : null}
                           </div>
 
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 min-w-0">
-                              <div className="truncate font-semibold text-zinc-200 text-sm">{display}</div>
+                              <div className="truncate font-semibold text-zinc-200 text-sm">
+                                <Link href={addressUrl} className="hover:underline">
+                                  {display}
+                                </Link>
+                              </div>
 
                               {/* here we need an X (ex twitter) Icon which will be a _blank link to the corresponding x account */}
                               <Link 
@@ -319,9 +380,11 @@ export default function LeaderboardClient({
                                 className="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-white/10 transition-colors group"
                               >
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img 
+                                <Image 
                                   src="/x.svg" 
                                   alt="X" 
+                                  width={14}
+                                  height={14}
                                   className="w-3.5 h-3.5 brightness-0 invert opacity-50 group-hover:opacity-100 transition-opacity" 
                                 />
                               </Link>
@@ -330,7 +393,7 @@ export default function LeaderboardClient({
                                 <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-white/5 border border-white/10 text-zinc-300 max-w-[240px]">
                                   {badgeIcon ? (
                                     // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={badgeIcon} alt="" className="w-3 h-3 shrink-0" />
+                                    <Image src={badgeIcon} alt="" width={12} height={12} className="w-3 h-3 shrink-0" />
                                   ) : null}
                                   <span className="truncate">{r.x_badge_label}</span>
                                 </span>

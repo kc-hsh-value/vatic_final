@@ -15,6 +15,8 @@ type PublicProfile = {
   name: string | null;
   users: Array<{ id: string; creator: boolean; mod: boolean }>;
   verifiedBadge: boolean;
+  x_label_badge: string | null;
+  x_badge_icon_url: string | null;
 };
 
 type ProfileStats = {
