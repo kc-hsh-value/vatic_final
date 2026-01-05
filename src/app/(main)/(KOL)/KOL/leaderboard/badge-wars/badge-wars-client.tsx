@@ -126,7 +126,7 @@ export default function BadgeWarsClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Initialize state from URL params or defaults
+  // Initialize state from URL params or defaults (removed badge and traderOffset from URL)
   const [period, setPeriod] = useState<LeaderboardPeriod>(() => {
     const urlPeriod = searchParams?.get("period") as LeaderboardPeriod;
     return urlPeriod && PERIODS.find((p) => p.key === urlPeriod) ? urlPeriod : initialPeriod;
@@ -144,14 +144,9 @@ export default function BadgeWarsClient({
     return urlOffset ? parseInt(urlOffset) : 0;
   });
   
-  const [selectedBadge, setSelectedBadge] = useState<string | null>(() => {
-    return searchParams?.get("badge") || null;
-  });
-  
-  const [traderOffset, setTraderOffset] = useState(() => {
-    const urlOffset = searchParams?.get("traderOffset");
-    return urlOffset ? parseInt(urlOffset) : 0;
-  });
+  // These are NOT in URL params anymore
+  const [selectedBadge, setSelectedBadge] = useState<string | null>(null);
+  const [traderOffset, setTraderOffset] = useState(0);
   
   const [allRows, setAllRows] = useState<BadgeWarRow[]>(initialRows);
   const [traderRows, setTraderRows] = useState<any[]>([]);
@@ -161,20 +156,19 @@ export default function BadgeWarsClient({
   
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [hasAutoSelected, setHasAutoSelected] = useState(false);
 
   const cacheKey = useMemo(
     () => `badgewars-${period}-${selectedBadge ?? "none"}-${traderOffset}-${badgeOffset}`,
     [period, selectedBadge, traderOffset, badgeOffset]
   );
 
-  // URL sync helper
+  // URL sync helper (badge and traderOffset removed from URL)
   const updateUrl = useCallback(
     (updates: {
       period?: LeaderboardPeriod;
       badgeOffset?: number;
       sortBy?: SortBy;
-      selectedBadge?: string | null;
-      traderOffset?: number;
     }) => {
       if (!isInitialized) return; // Don't update URL during initialization
       
@@ -183,14 +177,6 @@ export default function BadgeWarsClient({
       if (updates.period !== undefined) params.set("period", updates.period);
       if (updates.badgeOffset !== undefined) params.set("badgeOffset", String(updates.badgeOffset));
       if (updates.sortBy !== undefined) params.set("sortBy", updates.sortBy);
-      if (updates.selectedBadge !== undefined) {
-        if (updates.selectedBadge) {
-          params.set("badge", updates.selectedBadge);
-        } else {
-          params.delete("badge");
-        }
-      }
-      if (updates.traderOffset !== undefined) params.set("traderOffset", String(updates.traderOffset));
       
       router.replace(`?${params.toString()}`, { scroll: false });
     },
@@ -202,19 +188,21 @@ export default function BadgeWarsClient({
     setIsInitialized(true);
   }, []);
 
-  // Initial load: logic to pick the leading badge
+  // Initial load: logic to pick the leading badge (only once per period change)
   useEffect(() => {
-    if (isInitialized && allRows.length > 0 && !selectedBadge) {
+    if (isInitialized && allRows.length > 0 && !selectedBadge && !hasAutoSelected && !isLoading) {
       const topBadge = [...allRows].sort((a, b) => (b.pnl_sum ?? 0) - (a.pnl_sum ?? 0))[0];
       if (topBadge) {
+        setHasAutoSelected(true);
         loadBadgeTraders(topBadge.badge_label, 0, period);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allRows, isInitialized]);
+  }, [allRows, isInitialized, selectedBadge, hasAutoSelected, isLoading]);
 
   async function loadBadgeWars(nextPeriod: LeaderboardPeriod, nextOffset = 0) {
     setIsLoading(true);
+    setHasAutoSelected(false); // Reset auto-selection flag for new period
     try {
       // Fetch all badges (no limit) so we can sort properly on client
       const data = await getBadgeWars({ period: nextPeriod, limit: 1000, offset: 0 });
@@ -225,14 +213,14 @@ export default function BadgeWarsClient({
       // Update URL
       updateUrl({ period: nextPeriod, badgeOffset: nextOffset });
 
-      // Auto-select the new leading badge for the new period
+      // Auto-select the new leading badge for the new period and await its traders
       if (data && data.length > 0) {
         const topBadge = data.sort((a, b) => (b.pnl_sum ?? 0) - (a.pnl_sum ?? 0))[0];
-        loadBadgeTraders(topBadge.badge_label, 0, nextPeriod);
+        setHasAutoSelected(true); // Mark as auto-selected
+        await loadBadgeTraders(topBadge.badge_label, 0, nextPeriod, true);
       } else {
         setSelectedBadge(null);
         setTraderRows([]);
-        updateUrl({ selectedBadge: null, traderOffset: 0 });
       }
     } finally {
       setIsLoading(false);
@@ -245,10 +233,15 @@ export default function BadgeWarsClient({
     updateUrl({ badgeOffset: nextOffset });
   }
 
-  async function loadBadgeTraders(nextBadge: string, nextOffset = 0, periodOverride?: LeaderboardPeriod) {
+  async function loadBadgeTraders(
+    nextBadge: string, 
+    nextOffset = 0, 
+    periodOverride?: LeaderboardPeriod,
+    skipLoadingState = false
+  ) {
     const p = periodOverride ?? period;
 
-    setIsLoading(true);
+    if (!skipLoadingState) setIsLoading(true);
     try {
       const res = await getBadgeTraders({
         period: p,
@@ -257,15 +250,15 @@ export default function BadgeWarsClient({
         offset: nextOffset,
       });
 
+      // Sort by PnL descending to ensure proper order
+      const sortedRows = (res.rows ?? []).sort((a: any, b: any) => (b.pnl ?? 0) - (a.pnl ?? 0));
+
       setSelectedBadge(nextBadge);
-      setTraderRows(res.rows ?? []);
+      setTraderRows(sortedRows);
       setTraderTotal(res.total ?? 0);
       setTraderOffset(nextOffset);
-      
-      // Update URL
-      updateUrl({ selectedBadge: nextBadge, traderOffset: nextOffset });
     } finally {
-      setIsLoading(false);
+      if (!skipLoadingState) setIsLoading(false);
     }
   }
 
@@ -484,7 +477,6 @@ export default function BadgeWarsClient({
                     setTraderRows([]);
                     setTraderTotal(0);
                     setTraderOffset(0);
-                    updateUrl({ selectedBadge: null, traderOffset: 0 });
                   } else {
                     loadBadgeTraders(label, 0);
                   }
