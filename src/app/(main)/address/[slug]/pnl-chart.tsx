@@ -90,13 +90,24 @@ export default function PnlChart({
 
   const series = useMemo(() => {
     const arr = Array.isArray(points) ? points : [];
-    // lightweight-charts expects UTCTimestamp in seconds.
-    return arr
+    // lightweight-charts expects UTCTimestamp in seconds, sorted ascending, no duplicates
+    const filtered = arr
       .filter((x) => Number.isFinite(x?.t) && Number.isFinite(x?.p))
       .map((x) => ({
         time: x.t as Time,
         value: Number(x.p),
-      }));
+      }))
+      .sort((a, b) => (a.time as number) - (b.time as number));
+    
+    // Remove duplicates by keeping the last value for each timestamp
+    const deduplicated: Array<{ time: Time; value: number }> = [];
+    for (let i = 0; i < filtered.length; i++) {
+      if (i === filtered.length - 1 || filtered[i].time !== filtered[i + 1].time) {
+        deduplicated.push(filtered[i]);
+      }
+    }
+    
+    return deduplicated;
   }, [points]);
 
   const [tt, setTt] = useState<TooltipState>({

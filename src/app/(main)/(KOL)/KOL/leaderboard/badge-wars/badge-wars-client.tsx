@@ -198,7 +198,7 @@ export default function BadgeWarsClient({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allRows, isInitialized, selectedBadge, hasAutoSelected, isLoading]);
+  }, [ isInitialized, selectedBadge, hasAutoSelected, isLoading]);
 
   async function loadBadgeWars(nextPeriod: LeaderboardPeriod, nextOffset = 0) {
     setIsLoading(true);
