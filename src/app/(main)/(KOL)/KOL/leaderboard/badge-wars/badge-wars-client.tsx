@@ -190,7 +190,7 @@ export default function BadgeWarsClient({
 
   // Initial load: logic to pick the leading badge (only once per period change)
   useEffect(() => {
-    if (isInitialized && allRows.length > 0 && !selectedBadge && !hasAutoSelected && !isLoading) {
+    if (isInitialized && allRows.length > 0 && !selectedBadge && !hasAutoSelected) {
       const topBadge = [...allRows].sort((a, b) => (b.pnl_sum ?? 0) - (a.pnl_sum ?? 0))[0];
       if (topBadge) {
         setHasAutoSelected(true);
@@ -198,7 +198,7 @@ export default function BadgeWarsClient({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ isInitialized, selectedBadge, hasAutoSelected, isLoading]);
+  }, [allRows, isInitialized, selectedBadge, hasAutoSelected]);
 
   async function loadBadgeWars(nextPeriod: LeaderboardPeriod, nextOffset = 0) {
     setIsLoading(true);
