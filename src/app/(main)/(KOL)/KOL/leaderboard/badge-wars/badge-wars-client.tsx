@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { BarChart3, X, MousePointerClick, ChevronLeft, ChevronRight } from "lucide-react";
@@ -159,7 +159,7 @@ export default function BadgeWarsClient({
   const traderLimit = 25;
   const badgeLimit = 18;
   
-  const [isPending, startTransition] = useTransition();
+  const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
   const cacheKey = useMemo(
@@ -197,20 +197,25 @@ export default function BadgeWarsClient({
     [router, searchParams, isInitialized]
   );
 
+  // Mark as initialized after first render
+  useEffect(() => {
+    setIsInitialized(true);
+  }, []);
+
   // Initial load: logic to pick the leading badge
   useEffect(() => {
-    if (allRows.length > 0 && !selectedBadge && !isInitialized) {
+    if (isInitialized && allRows.length > 0 && !selectedBadge) {
       const topBadge = [...allRows].sort((a, b) => (b.pnl_sum ?? 0) - (a.pnl_sum ?? 0))[0];
       if (topBadge) {
         loadBadgeTraders(topBadge.badge_label, 0, period);
       }
-      setIsInitialized(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allRows]);
+  }, [allRows, isInitialized]);
 
   async function loadBadgeWars(nextPeriod: LeaderboardPeriod, nextOffset = 0) {
-    startTransition(async () => {
+    setIsLoading(true);
+    try {
       // Fetch all badges (no limit) so we can sort properly on client
       const data = await getBadgeWars({ period: nextPeriod, limit: 1000, offset: 0 });
       setAllRows(data ?? []);
@@ -229,7 +234,9 @@ export default function BadgeWarsClient({
         setTraderRows([]);
         updateUrl({ selectedBadge: null, traderOffset: 0 });
       }
-    });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   // Function to just change page without reloading data
@@ -241,7 +248,8 @@ export default function BadgeWarsClient({
   async function loadBadgeTraders(nextBadge: string, nextOffset = 0, periodOverride?: LeaderboardPeriod) {
     const p = periodOverride ?? period;
 
-    startTransition(async () => {
+    setIsLoading(true);
+    try {
       const res = await getBadgeTraders({
         period: p,
         badgeLabel: nextBadge,
@@ -256,7 +264,9 @@ export default function BadgeWarsClient({
       
       // Update URL
       updateUrl({ selectedBadge: nextBadge, traderOffset: nextOffset });
-    });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   const chartData = useMemo(() => {
@@ -334,7 +344,7 @@ export default function BadgeWarsClient({
               </div>
             </div>
           </div>
-          <div className="text-xs text-zinc-500 font-mono">{isPending ? "Loading..." : `${allRows.length} badges`}</div>
+          <div className="text-xs text-zinc-500 font-mono">{isLoading ? "Loading..." : `${allRows.length} badges`}</div>
         </div>
 
         {/* Controls */}
@@ -347,7 +357,7 @@ export default function BadgeWarsClient({
                 type="button"
                 variant="outline"
                 onClick={() => loadBadgeWars(p.key, 0)}
-                disabled={isPending}
+                disabled={isLoading}
                 className={cn(
                   "h-9 px-4 rounded-xl border text-sm",
                   period === p.key
@@ -373,7 +383,7 @@ export default function BadgeWarsClient({
                     setBadgeOffset(0);
                     updateUrl({ sortBy: "pnl_desc", badgeOffset: 0 });
                   }}
-                  disabled={isPending}
+                  disabled={isLoading}
                   className={cn(
                     "h-8 px-3 rounded-lg border text-xs",
                     sortBy === "pnl_desc"
@@ -391,7 +401,7 @@ export default function BadgeWarsClient({
                     setBadgeOffset(0);
                     updateUrl({ sortBy: "pnl_asc", badgeOffset: 0 });
                   }}
-                  disabled={isPending}
+                  disabled={isLoading}
                   className={cn(
                     "h-8 px-3 rounded-lg border text-xs",
                     sortBy === "pnl_asc"
@@ -409,7 +419,7 @@ export default function BadgeWarsClient({
                     setBadgeOffset(0);
                     updateUrl({ sortBy: "traders_desc", badgeOffset: 0 });
                   }}
-                  disabled={isPending}
+                  disabled={isLoading}
                   className={cn(
                     "h-8 px-3 rounded-lg border text-xs",
                     sortBy === "traders_desc"
@@ -427,7 +437,7 @@ export default function BadgeWarsClient({
                     setBadgeOffset(0);
                     updateUrl({ sortBy: "traders_asc", badgeOffset: 0 });
                   }}
-                  disabled={isPending}
+                  disabled={isLoading}
                   className={cn(
                     "h-8 px-3 rounded-lg border text-xs",
                     sortBy === "traders_asc"
@@ -525,7 +535,7 @@ export default function BadgeWarsClient({
                 type="button"
                 variant="outline"
                 onClick={() => changeBadgePage(Math.max(0, badgeOffset - badgeLimit))}
-                disabled={isPending || !canPrevBadges}
+                disabled={isLoading || !canPrevBadges}
                 className="h-9 px-3 rounded-xl bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
               >
                 <ChevronLeft className="w-4 h-4 mr-1" /> Prev
@@ -535,7 +545,7 @@ export default function BadgeWarsClient({
                 type="button"
                 variant="outline"
                 onClick={() => changeBadgePage(badgeOffset + badgeLimit)}
-                disabled={isPending || !canNextBadges}
+                disabled={isLoading || !canNextBadges}
                 className="h-9 px-3 rounded-xl bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
               >
                 Next <ChevronRight className="w-4 h-4 ml-1" />
@@ -571,7 +581,7 @@ export default function BadgeWarsClient({
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={isPending || !canPrevTraders}
+                    disabled={isLoading || !canPrevTraders}
                     onClick={() => loadBadgeTraders(selectedBadge, Math.max(0, traderOffset - traderLimit))}
                     className="h-8 px-3 rounded-lg bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
                   >
@@ -580,7 +590,7 @@ export default function BadgeWarsClient({
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={isPending || !canNextTraders}
+                    disabled={isLoading || !canNextTraders}
                     onClick={() => loadBadgeTraders(selectedBadge, traderOffset + traderLimit)}
                     className="h-8 px-3 rounded-lg bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
                   >
@@ -681,7 +691,7 @@ export default function BadgeWarsClient({
         </div>
 
         {/* Loading overlay */}
-        {isPending ? (
+        {isLoading ? (
           <div className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-zinc-900 border border-white/10 shadow-2xl">
               <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
