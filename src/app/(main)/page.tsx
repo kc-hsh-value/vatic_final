@@ -103,6 +103,7 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { toast } from "sonner";
 import {
   Terminal,
@@ -313,6 +314,7 @@ function WaitlistCTA({
 
 export default function VaticLandingPage() {
   const [activeTab, setActiveTab] = useState("prediction");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const toggleTab = (tab: string) => setActiveTab(tab);
 
   return (
@@ -328,9 +330,9 @@ export default function VaticLandingPage() {
           </div>
 
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-white/60">
-            <a href="/KOLwrapped" className="hover:text-white transition-colors">KOL wrapped 2025</a>
-            <a href="/KOLwrapped/leaderboard" className="hover:text-white transition-colors">Leaderboard</a>
-            <a href="/KOLwrapped/badge-wars" className="hover:text-white transition-colors">Badge Wars</a>
+            <Link href="/KOLwrapped" className="hover:text-white transition-colors">KOL wrapped 2025</Link>
+            <Link href="/KOL/leaderboard" className="hover:text-white transition-colors">Leaderboard</Link>
+            <Link href="/KOL/badge-wars" className="hover:text-white transition-colors">Badge Wars</Link>
             {/* <a href="#product" className="hover:text-white transition-colors">Product</a>
             <a href="#how-it-works" className="hover:text-white transition-colors">How it Works</a>
             <a href="#use-cases" className="hover:text-white transition-colors">Use Cases</a>
@@ -338,17 +340,85 @@ export default function VaticLandingPage() {
             {/* <a href="#faq" className="hover:text-white transition-colors">FAQ</a> */}
           </div>
 
-          <div className="flex items-center gap-4">
-            {/* <button className="text-sm font-medium text-white/70 hover:text-white transition-colors hidden sm:block">
-              Log in
-            </button> */}
+          <div className="flex items-center gap-3">
+            {/* Enter Terminal Button */}
+            <Link
+              href="/test"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden lg:flex items-center gap-2 text-sm font-medium text-white/70 hover:text-white transition-colors px-3 py-2"
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              <span className="text-xs">Have an invite code?</span>
+            </Link>
 
             {/* CTA -> Waitlist Modal */}
-            <WaitlistCTA className="text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+            <WaitlistCTA className="hidden sm:flex text-sm font-medium px-4 py-2 rounded-lg transition-colors">
               Request Access
             </WaitlistCTA>
+
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden text-white/70 hover:text-white transition-colors p-2"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? (
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-white/5 bg-[#050608] backdrop-blur-md">
+            <div className="px-6 py-4 space-y-4">
+              <Link
+                href="/KOLwrapped"
+                className="block text-sm font-medium text-white/60 hover:text-white transition-colors py-2"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                KOL wrapped 2025
+              </Link>
+              <Link
+                href="/KOL/leaderboard"
+                className="block text-sm font-medium text-white/60 hover:text-white transition-colors py-2"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Leaderboard
+              </Link>
+              <Link
+                href="/KOL/badge-wars"
+                className="block text-sm font-medium text-white/60 hover:text-white transition-colors py-2"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Badge Wars
+              </Link>
+              <div className="pt-4 border-t border-white/5 space-y-3">
+                <Link
+                  href="/test"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 text-sm font-medium text-white/70 hover:text-white transition-colors px-4 py-2 bg-white/5 border border-white/10 rounded-lg"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Terminal className="w-4 h-4" />
+                  Have an invite code?
+                </Link>
+                <WaitlistCTA className="w-full text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center justify-center">
+                  Request Access
+                </WaitlistCTA>
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
 
       <main className="pt-32 pb-20">

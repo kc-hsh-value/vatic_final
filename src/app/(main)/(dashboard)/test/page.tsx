@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useVaticUser } from "@/app/(main)/hooks/use-vatic-user";
-import { fetchFeed, FeedFilter, fetchFeedV3 } from "./actions/actions";
+import { fetchFeed, FeedFilter, fetchFeedV3, fetchFeedV4 } from "./actions/actions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,9 @@ type Market = {
   reason: string;
   urgency_score: number;
   relevance_score: number;
+  price_change_1h?: number;
+  price_change_12h?: number;
+  price_change_24h?: number;
 };
 
 type TweetCorrelation = {
@@ -127,7 +130,7 @@ export default function FeedPage() {
 
     const effectiveCursor = reset ? null : cursor;
 
-    const res = await fetchFeedV3(auth.userId, activeTab, effectiveCursor, 20);
+    const res = await fetchFeedV4(auth.userId, activeTab, effectiveCursor, 20);
 
     if (!res.success) {
       toast.error("Failed to load feed");
@@ -266,6 +269,8 @@ function TweetCard({ data }: { data: TweetCorrelation }) {
     return acc;
   }, {} as Record<string, typeof data.markets>);
 
+  console.log("groupedMarkets: ", groupedMarkets);
+
   // 2. Extract Token IDs for Prices
   const allTokenIds = data.markets.flatMap((m) => m.clobTokenIds || []);
   const { data: prices } = usePolymarketPrices(allTokenIds);
@@ -371,8 +376,8 @@ function TweetCard({ data }: { data: TweetCorrelation }) {
                     {markets.map((m) => (
                       <div key={m.market_id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/5 p-3 rounded-md border border-white/5 hover:border-white/10 transition-colors">
                          
-                         {/* Question Title */}
-                         <div className="flex-1">
+                         {/* Question Title with Price Changes */}
+                         <div className="flex-1 space-y-2">
                             <Link 
                                 href={`https://polymarket.com/event/${slug}/${m.market_slug}`}
                                 target="_blank"
@@ -380,6 +385,48 @@ function TweetCard({ data }: { data: TweetCorrelation }) {
                             >
                                 {m.question}
                             </Link>
+                            
+                            {/* Price Change Indicators */}
+                            {(m.price_change_1h != null || m.price_change_12h != null || m.price_change_24h != null) && (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {m.price_change_1h != null && (
+                                  <div className={`flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                                    m.price_change_1h > 0 
+                                      ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                                      : m.price_change_1h < 0 
+                                      ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
+                                      : 'bg-white/5 text-white/40 border border-white/10'
+                                  }`}>
+                                    <span className="text-white/50 font-normal">1h:</span>
+                                    {m.price_change_1h > 0 ? '+' : ''}{m.price_change_1h.toFixed(1)}%
+                                  </div>
+                                )}
+                                {m.price_change_12h != null && (
+                                  <div className={`flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                                    m.price_change_12h > 0 
+                                      ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                                      : m.price_change_12h < 0 
+                                      ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
+                                      : 'bg-white/5 text-white/40 border border-white/10'
+                                  }`}>
+                                    <span className="text-white/50 font-normal">12h:</span>
+                                    {m.price_change_12h > 0 ? '+' : ''}{m.price_change_12h.toFixed(1)}%
+                                  </div>
+                                )}
+                                {m.price_change_24h != null && (
+                                  <div className={`flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                                    m.price_change_24h > 0 
+                                      ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                                      : m.price_change_24h < 0 
+                                      ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
+                                      : 'bg-white/5 text-white/40 border border-white/10'
+                                  }`}>
+                                    <span className="text-white/50 font-normal">24h:</span>
+                                    {m.price_change_24h > 0 ? '+' : ''}{m.price_change_24h.toFixed(1)}%
+                                  </div>
+                                )}
+                              </div>
+                            )}
                          </div>
                          
                          {/* Outcome Buttons with PRICES */}

@@ -74,3 +74,32 @@ export async function fetchFeedV3(
     return { success: false, error: "Internal Server Error" };
   }
 }
+
+export async function fetchFeedV4(
+  userId: string,
+  filter: FeedFilter,
+  cursor: { time: string; id: string } | null,
+  limit: number = 20
+) {
+  const dbUserId = filter === "following" ? userId : null;
+
+  try {
+    const { data, error } = await supabaseAdmin.rpc("get_correlated_feed_v4", {
+      p_user_id: dbUserId,
+      p_min_urgency: 0,
+      p_limit: limit,
+      p_cursor_time: cursor?.time ?? null,
+      p_cursor_id: cursor?.id ?? null,
+    });
+
+    if (error) {
+      console.error("RPC Error:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data };
+  } catch (err) {
+    console.error("Fetch Error:", err);
+    return { success: false, error: "Internal Server Error" };
+  }
+}
