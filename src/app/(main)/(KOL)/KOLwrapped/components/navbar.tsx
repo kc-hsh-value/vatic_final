@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Lock, Sparkles, Menu } from "lucide-react";
+import { Lock, Sparkles, Menu, Terminal, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/sheet";
 
 import { joinWaitlist } from "../../../auth/actions/gate";
+import AddressSearchModal from "@/components/address-search-modal";
 
 // --- Waitlist Form Component (Internal) ---
 function WaitlistForm({ onSuccess }: { onSuccess: () => void }) {
@@ -113,6 +114,20 @@ function WaitlistForm({ onSuccess }: { onSuccess: () => void }) {
 export default function WrappedNavbar() {
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Global keyboard shortcut for search (⌘K / Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const navItems = [
     { label: "KOL Wrapped", href: "/KOLwrapped", disabled: false },
@@ -193,7 +208,30 @@ export default function WrappedNavbar() {
                       )
                     )}
 
-                    <div className="pt-4 border-t border-white/10">
+                    <div className="pt-4 border-t border-white/10 space-y-2">
+                      {/* Search Button (Mobile) */}
+                      <button
+                        onClick={() => {
+                          setSearchOpen(true);
+                          setMobileOpen(false);
+                        }}
+                        className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm font-medium text-white/70 hover:text-white bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                      >
+                        <Search className="w-4 h-4" />
+                        Search Addresses
+                      </button>
+
+                      <Link
+                        href="/test"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setMobileOpen(false)}
+                        className="flex items-center justify-center gap-2 w-full h-10 rounded-lg px-3 py-2 text-sm font-medium text-white/70 hover:text-white bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                      >
+                        <Terminal className="w-4 h-4" />
+                        Have an invite code?
+                      </Link>
+
                       <Dialog open={open} onOpenChange={setOpen}>
                         <DialogTrigger asChild>
                           <Button
@@ -281,6 +319,32 @@ export default function WrappedNavbar() {
 
           {/* Right: Waitlist CTA (Desktop + always visible) */}
           <div className="flex items-center gap-3">
+            {/* Search Button (Desktop) */}
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group"
+            >
+              <Search className="w-3.5 h-3.5 text-white/50 group-hover:text-white/70" />
+              <span className="text-xs text-white/50 group-hover:text-white/70">
+                Search
+              </span>
+              <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/10 text-[10px] text-white/40 border border-white/10">
+                <span>⌘</span>
+                <span>K</span>
+              </kbd>
+            </button>
+
+            {/* Enter Terminal Button */}
+            <Link
+              href="/test"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden lg:flex items-center gap-2 text-sm font-medium text-white/70 hover:text-white transition-colors px-3 py-2"
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              <span className="text-xs">Have an invite code?</span>
+            </Link>
+
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button
@@ -324,6 +388,9 @@ export default function WrappedNavbar() {
           </div>
         </div>
       </div>
+
+      {/* Address Search Modal */}
+      <AddressSearchModal open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }
