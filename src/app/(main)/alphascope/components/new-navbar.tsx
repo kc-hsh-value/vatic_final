@@ -11,14 +11,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Copy, LogOut, Wallet, ChevronDown, RefreshCcw, Settings } from "lucide-react";
+import { Copy, LogOut, Wallet, ChevronDown, RefreshCcw, Settings, Search } from "lucide-react";
 import { toast } from "sonner";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { polygon } from "viem/chains";
 
 import { Spinner } from "@/components/ui/spinner";
 import { useVaticUser } from "@/app/(main)/hooks/use-vatic-user";
 import WithdrawDialog from "./withdraw-dialog";
+import AddressSearchModal from "@/components/address-search-modal";
 
 function shortAddr(addr?: string) {
   return addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : "—";
@@ -34,6 +35,20 @@ export default function DashboardNavbar() {
   const { auth, identity, provision, eoaWallet, safeWallet, status, resumeSetup } = useVaticUser();
   const [showPortfolio, setShowPortfolio] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Global keyboard shortcut for search (⌘K / Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
     
 
 
@@ -105,21 +120,54 @@ export default function DashboardNavbar() {
         <div className="h-16 flex items-center justify-between">
           {/* Left: Brand + Nav */}
           <div className="flex items-center gap-6">
-            <Link href="/alphascope" className="flex items-center gap-2">
+            <Link href="/test" className="flex items-center gap-2">
               <Image src="/logo.png" alt="Vatic" width={28} height={28} className="rounded-md" />
               <span className="font-semibold tracking-tight">vatic trading</span>
             </Link>
             <nav className="hidden md:flex items-center gap-4 text-sm text-white/80">
-              <Link href="/markets" className="hover:text-white">Markets</Link>
-              <Link href="/signals" className="hover:text-white">Signals</Link>
-              <Link href="/alphascope" className="hover:text-white">AlphaScope</Link>
-              <Link href="/portfolio" className="hover:text-white">Portfolio</Link>
-              <Link href="/history" className="hover:text-white">History</Link>
+              {/* KOL Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-1 hover:text-white transition-colors">
+                    KOL
+                    <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48">
+                  <DropdownMenuItem asChild>
+                    <Link href="/KOL/leaderboard" className="cursor-pointer">Leaderboard</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/KOL/badge-wars" className="cursor-pointer">Badge Wars</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/KOLwrapped" className="cursor-pointer">KOL Wrapped 2025</Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              <Link href="/test" className="hover:text-white">AlphaScope</Link>
             </nav>
           </div>
 
-          {/* Right: Wallet + Balance + Profile */}
+          {/* Right: Search + Wallet + Balance + Profile */}
           <div className="flex items-center gap-3">
+            {/* Search Button */}
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="hidden md:flex items-center gap-2 px-4 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group h-9"
+            >
+              <Search className="w-3.5 h-3.5 text-white/50 group-hover:text-white/70" />
+              <span className="text-xs text-white/50 group-hover:text-white/70">
+                Search
+              </span>
+              <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/10 text-[10px] text-white/40 border border-white/10">
+                <span>⌘</span>
+                <span>K</span>
+              </kbd>
+            </button>
+
             {/* Wallet pill */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -267,6 +315,9 @@ export default function DashboardNavbar() {
           </div>
         )}
       </div>
+
+      {/* Address Search Modal */}
+      <AddressSearchModal open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }

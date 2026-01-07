@@ -1,5 +1,5 @@
 import React from 'react'
-import WrappedNavbar from '../(KOL)/KOLwrapped/components/navbar';
+import UnifiedNavbar from '@/components/unified-navbar';
 
 interface Props {
     children: React.ReactNode;
@@ -9,7 +9,7 @@ const Layout = ({ children }: Props) => {
 
   return (
     <div>
-        <WrappedNavbar/>
+        <UnifiedNavbar/>
         {children}
     </div>
   )

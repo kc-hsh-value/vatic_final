@@ -101,7 +101,7 @@
 // export default Home;
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -121,7 +121,6 @@ import {
   Layers,
   Cpu,
   Sparkles,
-  Search,
 } from "lucide-react";
 
 // shadcn/ui
@@ -136,7 +135,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { joinWaitlist } from "./auth/actions/gate";
-import AddressSearchModal from "@/components/address-search-modal";
 
 
 // --- Components ---
@@ -317,21 +315,7 @@ function WaitlistCTA({
 export default function VaticLandingPage() {
   const [activeTab, setActiveTab] = useState("prediction");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const toggleTab = (tab: string) => setActiveTab(tab);
-
-  // Global keyboard shortcut for search (⌘K / Ctrl+K)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setSearchOpen(true);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
   return (
     <div className="min-h-screen bg-[#050608] text-white font-sans selection:bg-indigo-500/30 overflow-x-hidden">
@@ -357,21 +341,6 @@ export default function VaticLandingPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Search Button (Desktop) */}
-            <button
-              onClick={() => setSearchOpen(true)}
-              className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group"
-            >
-              <Search className="w-3.5 h-3.5 text-white/50 group-hover:text-white/70" />
-              <span className="text-xs text-white/50 group-hover:text-white/70">
-                Search
-              </span>
-              <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/10 text-[10px] text-white/40 border border-white/10">
-                <span>⌘</span>
-                <span>K</span>
-              </kbd>
-            </button>
-
             {/* Enter Terminal Button */}
             <Link
               href="/test"
@@ -411,18 +380,6 @@ export default function VaticLandingPage() {
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-white/5 bg-[#050608] backdrop-blur-md">
             <div className="px-6 py-4 space-y-4">
-              {/* Search Button (Mobile) */}
-              <button
-                onClick={() => {
-                  setSearchOpen(true);
-                  setMobileMenuOpen(false);
-                }}
-                className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-white/70 hover:text-white bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
-              >
-                <Search className="w-4 h-4" />
-                Search Addresses
-              </button>
-
               <Link
                 href="/KOLwrapped"
                 className="block text-sm font-medium text-white/60 hover:text-white transition-colors py-2"
@@ -897,9 +854,6 @@ export default function VaticLandingPage() {
           </div>
         </div>
       </footer>
-
-      {/* Address Search Modal */}
-      <AddressSearchModal open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }
