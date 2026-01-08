@@ -17,6 +17,7 @@ import { formatSlugToTitle } from "@/lib/utils";
 import { usePolymarketPrices } from "@/app/(main)/hooks/use-prices";
 import { ManageSourcesDialog } from "./components/manage-sources-dialog";
 import { MediaEntity, TweetMedia } from "./components/tweet_media";
+import { WhaleWatching } from "./components/whale-watching";
 
 // ... Types remain the same ...
 type Market = {
@@ -161,81 +162,97 @@ export default function FeedPage() {
   };
 
   return (
-    <main className="container max-w-5xl mx-auto py-6 sm:py-8 px-4 sm:px-6">
-      <div className="flex flex-col gap-6">
+    <main className="container max-w-[1800px] mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:h-screen lg:flex lg:flex-col">
+      {/* === SPLIT LAYOUT: Feed on Left, Whale Watching on Right === */}
+      {/* On mobile: Stack vertically with normal scroll, On desktop: Side by side with independent scrolling */}
+      {/* Mobile: flex-col with auto height, Desktop: flex-row with fixed height and overflow */}
+      <div className="flex flex-col lg:flex-row gap-6 lg:flex-1 lg:overflow-hidden">
         
-        {/* --- Header Area --- */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-              Alpha Feed <span className="text-xs font-mono font-normal text-green-400 bg-green-400/10 px-2 py-0.5 rounded border border-green-400/20">LIVE</span>
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Real-time semantic correlations between X and Polymarket.
-            </p>
-          </div>
+        {/* === LEFT COLUMN: Alpha Feed === */}
+        {/* Mobile: Normal flow, Desktop: Independent scroll in 60% column */}
+        <div className="w-full lg:w-[60%] flex flex-col gap-6 lg:overflow-y-auto">
           
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-             <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => loadFeed(true)} 
-                disabled={loading}
-                className="flex-1 sm:flex-none border-white/10 hover:bg-white/5"
-             >
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
+          {/* --- Header Area --- */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+                Alpha Feed <span className="text-xs font-mono font-normal text-green-400 bg-green-400/10 px-2 py-0.5 rounded border border-green-400/20">LIVE</span>
+              </h1>
+              <p className="text-muted-foreground text-sm mt-1">
+                Real-time semantic correlations between X and Polymarket.
+              </p>
+            </div>
             
-            {/* Manage Sources Button (visible on all tabs for easy access) */}
-            <Button 
-                variant="secondary" 
-                size="sm" 
-                onClick={() => setManageOpen(true)}
-                className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-500 text-white border-none"
-             >
-               <Settings2 className="mr-2 h-4 w-4"/>
-               Sources
-            </Button>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+               <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => loadFeed(true)} 
+                  disabled={loading}
+                  className="flex-1 sm:flex-none border-white/10 hover:bg-white/5"
+               >
+                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+              
+              {/* Manage Sources Button (visible on all tabs for easy access) */}
+              <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => setManageOpen(true)}
+                  className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-500 text-white border-none"
+               >
+                 <Settings2 className="mr-2 h-4 w-4"/>
+                 Sources
+              </Button>
+            </div>
           </div>
+
+          {/* --- Tabs & Content --- */}
+          <Tabs defaultValue="global" onValueChange={(v: string) => setActiveTab(v as FeedFilter)} className="w-full">
+            <TabsList className="grid w-full sm:w-[400px] grid-cols-2 bg-black/40 border border-white/10 p-1">
+              <TabsTrigger value="global" className="data-[state=active]:bg-white/10">Global Feed</TabsTrigger>
+              <TabsTrigger value="following" className="data-[state=active]:bg-white/10">My Following</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="global" className="mt-6 space-y-4 min-h-[50vh]">
+              <FeedList items={items} loading={loading} />
+            </TabsContent>
+            
+            <TabsContent value="following" className="mt-6 space-y-4 min-h-[50vh]">
+               {items.length === 0 && !loading ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-muted-foreground border border-dashed border-white/10 rounded-xl bg-white/5 gap-4">
+                     <p className="text-center">You are not following any accounts yet.</p>
+                     <Button onClick={() => setManageOpen(true)} variant="default">
+                       <TrendingUp className="mr-2 h-4 w-4" /> Add Accounts
+                     </Button>
+                  </div>
+               ) : (
+                 <FeedList items={items} loading={loading} />
+               )}
+            </TabsContent>
+          </Tabs>
+
+          {/* Load More */}
+          {hasMore && items.length > 0 && (
+            <Button 
+              variant="ghost" 
+              className="self-center mt-4 w-full sm:w-auto text-white/50 hover:text-white" 
+              onClick={() => loadFeed(false)} 
+              disabled={loading}
+            >
+              {loading ? "Loading..." : "Load More Activity"}
+            </Button>
+          )}
         </div>
 
-        {/* --- Tabs & Content --- */}
-        <Tabs defaultValue="global" onValueChange={(v: string) => setActiveTab(v as FeedFilter)} className="w-full">
-          <TabsList className="grid w-full sm:w-[400px] grid-cols-2 bg-black/40 border border-white/10 p-1">
-            <TabsTrigger value="global" className="data-[state=active]:bg-white/10">Global Feed</TabsTrigger>
-            <TabsTrigger value="following" className="data-[state=active]:bg-white/10">My Following</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="global" className="mt-6 space-y-4 min-h-[50vh]">
-            <FeedList items={items} loading={loading} />
-          </TabsContent>
-          
-          <TabsContent value="following" className="mt-6 space-y-4 min-h-[50vh]">
-             {items.length === 0 && !loading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-muted-foreground border border-dashed border-white/10 rounded-xl bg-white/5 gap-4">
-                   <p className="text-center">You are not following any accounts yet.</p>
-                   <Button onClick={() => setManageOpen(true)} variant="default">
-                     <TrendingUp className="mr-2 h-4 w-4" /> Add Accounts
-                   </Button>
-                </div>
-             ) : (
-               <FeedList items={items} loading={loading} />
-             )}
-          </TabsContent>
-        </Tabs>
-
-        {/* Load More */}
-        {hasMore && items.length > 0 && (
-          <Button 
-            variant="ghost" 
-            className="self-center mt-4 w-full sm:w-auto text-white/50 hover:text-white" 
-            onClick={() => loadFeed(false)} 
-            disabled={loading}
-          >
-            {loading ? "Loading..." : "Load More Activity"}
-          </Button>
-        )}
+        {/* === RIGHT COLUMN: Whale Watching === */}
+        {/* Mobile: Normal flow with fixed height, Desktop: Independent scroll in 40% column */}
+        <div className="w-full lg:w-[40%] h-[600px] lg:h-full">
+          {/* Mobile: 600px fixed height, Desktop: Full height with independent scroll */}
+          <WhaleWatching />
+        </div>
+        
       </div>
       
       {/* The Dialog */}
