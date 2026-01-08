@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Eye, DollarSign, TrendingUp, TrendingDown, Activity, Settings } from "lucide-react";
+import { Eye, DollarSign, TrendingUp, TrendingDown, Activity, Settings, ChevronDown, ChevronUp, Filter } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import Image from "next/image";
@@ -46,16 +46,74 @@ interface TradeMessage {
  * Whale Watching Component
  * Connects to Polymarket WebSocket to display real-time large trades
  */
-export function WhaleWatching() {
+export function WhaleWatching({ 
+  externalEventSlugs = [], 
+  externalMarketSlugs = [] 
+}: { 
+  externalEventSlugs?: string[]; 
+  externalMarketSlugs?: string[];
+}) {
   // --- State Management ---
   const [trades, setTrades] = useState<TradeMessage[]>([]);
-  const [minValue, setMinValue] = useState<number>(1000); // Default minimum value filter: $1000
-  const [tempMinValue, setTempMinValue] = useState<string>("1000");
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+  
+  // Filter states
+  const [minValue, setMinValue] = useState<number>(1000); // Minimum trade value
+  const [maxValue, setMaxValue] = useState<number | null>(null); // Maximum trade value
+  const [minPrice, setMinPrice] = useState<number | null>(null); // Minimum share price (0-1)
+  const [maxPrice, setMaxPrice] = useState<number | null>(null); // Maximum share price (0-1)
+  const [traderAddress, setTraderAddress] = useState<string>(""); // Filter by trader wallet
+  const [eventSlug, setEventSlug] = useState<string>(""); // Filter by event slug
+  const [marketSlug, setMarketSlug] = useState<string>(""); // Filter by market slug
+  const [tradeSide, setTradeSide] = useState<string>(""); // "BUY", "SELL", or ""
+  const [outcome, setOutcome] = useState<string>(""); // "Yes", "No", or ""
+  
+  // Temp input values
+  const [tempMinValue, setTempMinValue] = useState<string>("1000");
+  const [tempMaxValue, setTempMaxValue] = useState<string>("");
+  const [tempMinPrice, setTempMinPrice] = useState<string>("");
+  const [tempMaxPrice, setTempMaxPrice] = useState<string>("");
   
   // WebSocket reference
   const wsRef = useRef<WebSocket | null>(null);
+  
+  // Refs to always access current filter values in WebSocket callbacks
+  // This solves the stale closure problem
+  const filtersRef = useRef({
+    minValue,
+    maxValue,
+    minPrice,
+    maxPrice,
+    traderAddress,
+    eventSlug,
+    marketSlug,
+    tradeSide,
+    outcome
+  });
+  
+  // Scroll container reference for maintaining scroll position
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  
+  // Previous scroll height to detect when new content is added
+  const prevScrollHeightRef = useRef<number>(0);
+
+  // Keep filtersRef in sync with filter states
+  useEffect(() => {
+    filtersRef.current = {
+      minValue,
+      maxValue,
+      minPrice,
+      maxPrice,
+      traderAddress,
+      eventSlug,
+      marketSlug,
+      tradeSide,
+      outcome
+    };
+    // console.log(`💰 Filters updated:`, filtersRef.current);
+  }, [minValue, maxValue, minPrice, maxPrice, traderAddress, eventSlug, marketSlug, tradeSide, outcome]);
 
   /**
    * Connect to Polymarket WebSocket
@@ -100,12 +158,10 @@ export function WhaleWatching() {
       ws.onmessage = (event: MessageEvent) => {
         // --- Handle WebSocket messages safely ---
         // The WebSocket may send: ping/pong messages, connection confirmations, or actual data
-        
         // Skip empty messages
         if (!event.data || event.data.length === 0) {
           return;
         }
-        
         // Skip non-string messages (binary data, etc.)
         if (typeof event.data !== "string") {
           return;
@@ -122,11 +178,84 @@ export function WhaleWatching() {
           // Only process trade messages with payload
           if (message.topic === "activity" && message.type === "trades" && message.payload) {
             const tradeValue = message.payload.size * message.payload.price;
+            const filters = filtersRef.current;
             
-            // Filter by minimum value threshold
-            if (tradeValue >= minValue) {
+            // Apply all filters
+            let passesFilters = true;
+            
+            // Filter by trade value (min/max)
+            if (tradeValue < filters.minValue) {
+              passesFilters = false;
+            }
+            if (filters.maxValue !== null && tradeValue > filters.maxValue) {
+              passesFilters = false;
+            }
+            
+            // Filter by share price (min/max)
+            if (filters.minPrice !== null && message.payload.price < filters.minPrice) {
+              passesFilters = false;
+            }
+            if (filters.maxPrice !== null && message.payload.price > filters.maxPrice) {
+              passesFilters = false;
+            }
+            
+            // Filter by trader address (supports multiple, comma-separated)
+            if (filters.traderAddress) {
+              const traderAddresses = filters.traderAddress.split(',').map(a => a.trim().toLowerCase()).filter(a => a);
+              if (traderAddresses.length > 0) {
+                const matches = traderAddresses.some(addr => 
+                  message.payload.proxyWallet.toLowerCase().includes(addr)
+                );
+                if (!matches) {
+                  passesFilters = false;
+                }
+              }
+            }
+            
+            // Filter by event slug (supports multiple, comma-separated)
+            if (filters.eventSlug) {
+              const eventSlugs = filters.eventSlug.split(',').map(s => s.trim().toLowerCase()).filter(s => s);
+              if (eventSlugs.length > 0) {
+                const matches = eventSlugs.some(slug => 
+                  message.payload.eventSlug.toLowerCase().includes(slug)
+                );
+                if (!matches) {
+                  passesFilters = false;
+                }
+              }
+            }
+            
+            // Filter by market slug (supports multiple, comma-separated)
+            if (filters.marketSlug) {
+              const marketSlugs = filters.marketSlug.split(',').map(s => s.trim().toLowerCase()).filter(s => s);
+              if (marketSlugs.length > 0) {
+                const matches = marketSlugs.some(slug => 
+                  message.payload.slug.toLowerCase().includes(slug)
+                );
+                if (!matches) {
+                  passesFilters = false;
+                }
+              }
+            }
+            
+            // Filter by trade side (BUY/SELL)
+            if (filters.tradeSide && message.payload.side !== filters.tradeSide) {
+              passesFilters = false;
+            }
+            
+            // Filter by outcome (Yes/No)
+            if (filters.outcome && message.payload.outcome !== filters.outcome) {
+              passesFilters = false;
+            }
+            
+            // 🔍 DEBUG: Log filtering decision
+            // console.log(`📊 Trade: $${tradeValue.toFixed(2)} | ${message.payload.side} ${message.payload.outcome} @ ${(message.payload.price * 100).toFixed(1)}¢ | Pass: ${passesFilters}`);
+            
+            if (passesFilters) {
               setTrades(prev => [message, ...prev].slice(0, 50)); // Keep last 50 trades
-              console.log(`🐋 Whale trade detected: $${tradeValue.toFixed(2)} - ${message.payload.outcome} @ ${(message.payload.price * 100).toFixed(1)}¢`);
+              // console.log(`🐋 Whale trade ACCEPTED: $${tradeValue.toFixed(2)} - ${message.payload.outcome} @ ${(message.payload.price * 100).toFixed(1)}¢`);
+            } else {
+              // console.log(`🚫 Trade REJECTED by filters`);
             }
           }
         } catch (error) {
@@ -178,14 +307,57 @@ export function WhaleWatching() {
   };
 
   /**
-   * Update minimum value filter
+   * Update filters and clear trades
    */
-  const updateMinValue = () => {
-    const value = parseFloat(tempMinValue);
-    if (!isNaN(value) && value >= 0) {
-      setMinValue(value);
-      setTrades([]); // Clear existing trades when filter changes
+  const applyFilters = () => {
+    // Parse and validate min value
+    const minVal = parseFloat(tempMinValue);
+    if (!isNaN(minVal) && minVal >= 0) {
+      setMinValue(minVal);
     }
+    
+    // Parse and validate max value
+    const maxVal = tempMaxValue ? parseFloat(tempMaxValue) : null;
+    if (maxVal === null || (!isNaN(maxVal) && maxVal >= 0)) {
+      setMaxValue(maxVal);
+    }
+    
+    // Parse and validate min price (0-1 range)
+    const minPr = tempMinPrice ? parseFloat(tempMinPrice) : null;
+    if (minPr === null || (!isNaN(minPr) && minPr >= 0 && minPr <= 1)) {
+      setMinPrice(minPr);
+    }
+    
+    // Parse and validate max price (0-1 range)
+    const maxPr = tempMaxPrice ? parseFloat(tempMaxPrice) : null;
+    if (maxPr === null || (!isNaN(maxPr) && maxPr >= 0 && maxPr <= 1)) {
+      setMaxPrice(maxPr);
+    }
+    
+    // Clear existing trades when filters change
+    setTrades([]);
+  };
+  
+  /**
+   * Clear all filters
+   */
+  const clearFilters = () => {
+    setMinValue(1000);
+    setMaxValue(null);
+    setMinPrice(null);
+    setMaxPrice(null);
+    setTraderAddress("");
+    setEventSlug("");
+    setMarketSlug("");
+    setTradeSide("");
+    setOutcome("");
+    
+    setTempMinValue("1000");
+    setTempMaxValue("");
+    setTempMinPrice("");
+    setTempMaxPrice("");
+    
+    setTrades([]);
   };
 
   // Auto-connect on component mount
@@ -199,6 +371,41 @@ export function WhaleWatching() {
       }
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply external filters when they change (from parent component)
+  useEffect(() => {
+    if (externalEventSlugs.length > 0 || externalMarketSlugs.length > 0) {
+      setEventSlug(externalEventSlugs.join(', '));
+      setMarketSlug(externalMarketSlugs.join(', '));
+      setShowFilters(true); // Auto-expand filters to show what was applied
+      setTrades([]); // Clear existing trades
+    }
+  }, [externalEventSlugs, externalMarketSlugs]);
+
+  // Maintain scroll position when new trades are added at the top
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer) return;
+
+    // Get the current scroll position
+    const currentScrollTop = scrollContainer.scrollTop;
+    const currentScrollHeight = scrollContainer.scrollHeight;
+    
+    // Check if user is at the very top (within 10px threshold)
+    const isAtTop = currentScrollTop < 10;
+    
+    // If not at top and scroll height changed (new content added)
+    if (!isAtTop && prevScrollHeightRef.current > 0 && currentScrollHeight !== prevScrollHeightRef.current) {
+      // Calculate the difference in scroll height
+      const heightDifference = currentScrollHeight - prevScrollHeightRef.current;
+      
+      // Adjust scroll position to maintain view of same content
+      scrollContainer.scrollTop = currentScrollTop + heightDifference;
+    }
+    
+    // Update previous scroll height
+    prevScrollHeightRef.current = currentScrollHeight;
+  }, [trades]); // Run when trades change
 
   return (
     <Card className="border border-white/10 bg-[#0F1115] shadow-lg h-full flex flex-col overflow-hidden">
@@ -227,49 +434,255 @@ export function WhaleWatching() {
         </div>
 
         {/* --- Filter Controls --- */}
-        <div className="flex items-center gap-2 mt-4">
-          <div className="flex-1 flex items-center gap-2">
-            <DollarSign className="h-4 w-4 text-white/40" />
-            <Input
-              type="number"
-              value={tempMinValue}
-              onChange={(e) => setTempMinValue(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && updateMinValue()}
-              placeholder="Min trade value"
-              className="bg-black/40 border-white/10 text-white h-8 text-sm"
-            />
+        <div className="space-y-3 mt-4">
+          {/* Quick Filters Row */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-white/40 flex-shrink-0" />
+              <Input
+                type="number"
+                value={tempMinValue}
+                onChange={(e) => setTempMinValue(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                placeholder="Min value"
+                className="bg-black/40 border-white/10 text-white h-8 text-sm"
+              />
+              <Input
+                type="number"
+                value={tempMaxValue}
+                onChange={(e) => setTempMaxValue(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                placeholder="Max value"
+                className="bg-black/40 border-white/10 text-white h-8 text-sm"
+              />
+            </div>
+            
             <Button 
               size="sm" 
               variant="outline"
-              onClick={updateMinValue}
+              onClick={() => setShowFilters(!showFilters)}
               className="h-8 border-white/10 hover:bg-white/5"
             >
-              <Settings className="h-3 w-3" />
+              <Filter className="h-3 w-3 mr-1" />
+              {showFilters ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </Button>
-          </div>
-          
-          {/* Connection Status */}
-          <div className="flex items-center gap-2">
+            
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={applyFilters}
+              className="h-8 border-white/10 hover:bg-white/5"
+            >
+              Apply
+            </Button>
+            
+            {/* Connection Status */}
             {isConnecting && (
-              <span className="text-xs text-yellow-400">Connecting...</span>
+              <span className="text-xs text-yellow-400 whitespace-nowrap">Connecting...</span>
             )}
             {!isConnected && !isConnecting && (
               <Button 
                 size="sm" 
                 variant="outline"
                 onClick={connectWebSocket}
-                className="h-8 text-xs border-white/10 hover:bg-white/5"
+                className="h-8 text-xs border-white/10 hover:bg-white/5 whitespace-nowrap"
               >
                 Reconnect
               </Button>
             )}
           </div>
+
+          {/* Advanced Filters (Collapsible) */}
+          {showFilters && (
+            <div className="space-y-2 p-3 bg-black/20 rounded-lg border border-white/5">
+              {/* Share Price Range */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-white/60 mb-1 block">Min Share Price (0-1)</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="1"
+                    value={tempMinPrice}
+                    onChange={(e) => setTempMinPrice(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                    placeholder="e.g. 0.5"
+                    className="bg-black/40 border-white/10 text-white h-8 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-white/60 mb-1 block">Max Share Price (0-1)</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="1"
+                    value={tempMaxPrice}
+                    onChange={(e) => setTempMaxPrice(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                    placeholder="e.g. 0.8"
+                    className="bg-black/40 border-white/10 text-white h-8 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Trader & Event */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-white/60 mb-1 block">Trader Address(es)</label>
+                  <Input
+                    type="text"
+                    value={traderAddress}
+                    onChange={(e) => setTraderAddress(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                    placeholder="0x..., 0x... (comma-separated)"
+                    className="bg-black/40 border-white/10 text-white h-8 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-white/60 mb-1 block">Event Slug(s)</label>
+                  <Input
+                    type="text"
+                    value={eventSlug}
+                    onChange={(e) => setEventSlug(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                    placeholder="event-1, event-2"
+                    className="bg-black/40 border-white/10 text-white h-8 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Market Slug (Full Width) */}
+              <div>
+                <label className="text-xs text-white/60 mb-1 block">Market Slug(s) - Specific</label>
+                <Input
+                  type="text"
+                  value={marketSlug}
+                  onChange={(e) => setMarketSlug(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                  placeholder="market-1, market-2, market-3 (comma-separated)"
+                  className="bg-black/40 border-white/10 text-white h-8 text-sm"
+                />
+              </div>
+
+              {/* Trade Type & Outcome */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-white/60 mb-1 block">Trade Side</label>
+                  <select
+                    value={tradeSide}
+                    onChange={(e) => setTradeSide(e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 text-white h-8 text-sm rounded-md px-2"
+                  >
+                    <option value="">All</option>
+                    <option value="BUY">Buy</option>
+                    <option value="SELL">Sell</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-white/60 mb-1 block">Outcome</label>
+                  <select
+                    value={outcome}
+                    onChange={(e) => setOutcome(e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 text-white h-8 text-sm rounded-md px-2"
+                  >
+                    <option value="">All</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 pt-2">
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={clearFilters}
+                  className="h-8 text-xs border-white/10 hover:bg-white/5 flex-1"
+                >
+                  Clear All
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="default"
+                  onClick={applyFilters}
+                  className="h-8 text-xs flex-1"
+                >
+                  Apply Filters
+                </Button>
+              </div>
+
+              {/* Active Filters Display */}
+              <div className="flex flex-wrap gap-1 pt-2 border-t border-white/5">
+                {minValue > 0 && (
+                  <Badge className="text-xs bg-blue-500/10 text-blue-400 border-blue-500/20">
+                    Min: ${minValue.toLocaleString()}
+                  </Badge>
+                )}
+                {maxValue !== null && (
+                  <Badge className="text-xs bg-blue-500/10 text-blue-400 border-blue-500/20">
+                    Max: ${maxValue.toLocaleString()}
+                  </Badge>
+                )}
+                {minPrice !== null && (
+                  <Badge className="text-xs bg-purple-500/10 text-purple-400 border-purple-500/20">
+                    Min Price: {(minPrice * 100).toFixed(0)}¢
+                  </Badge>
+                )}
+                {maxPrice !== null && (
+                  <Badge className="text-xs bg-purple-500/10 text-purple-400 border-purple-500/20">
+                    Max Price: {(maxPrice * 100).toFixed(0)}¢
+                  </Badge>
+                )}
+                {traderAddress && (
+                  <Badge className="text-xs bg-green-500/10 text-green-400 border-green-500/20">
+                    Trader{traderAddress.split(',').filter(a => a.trim()).length > 1 ? 's' : ''}: {
+                      traderAddress.split(',').length > 1 
+                        ? `${traderAddress.split(',').filter(a => a.trim()).length} addresses`
+                        : traderAddress.slice(0, 6) + '...'
+                    }
+                  </Badge>
+                )}
+                {eventSlug && (
+                  <Badge className="text-xs bg-cyan-500/10 text-cyan-400 border-cyan-500/20">
+                    Event{eventSlug.split(',').filter(s => s.trim()).length > 1 ? 's' : ''}: {
+                      eventSlug.split(',').length > 1
+                        ? `${eventSlug.split(',').filter(s => s.trim()).length} events`
+                        : eventSlug
+                    }
+                  </Badge>
+                )}
+                {marketSlug && (
+                  <Badge className="text-xs bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+                    Market{marketSlug.split(',').filter(s => s.trim()).length > 1 ? 's' : ''}: {
+                      marketSlug.split(',').length > 1
+                        ? `${marketSlug.split(',').filter(s => s.trim()).length} markets`
+                        : marketSlug
+                    }
+                  </Badge>
+                )}
+                {tradeSide && (
+                  <Badge className="text-xs bg-orange-500/10 text-orange-400 border-orange-500/20">
+                    {tradeSide}
+                  </Badge>
+                )}
+                {outcome && (
+                  <Badge className="text-xs bg-pink-500/10 text-pink-400 border-pink-500/20">
+                    {outcome}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </CardHeader>
 
       {/* --- Trades List Section with Independent Scroll --- */}
       {/* This section scrolls independently from the Alpha Feed */}
-      <CardContent className="flex-1 overflow-y-auto p-0">
+      {/* Ref attached for scroll position management when new trades arrive */}
+      <CardContent ref={scrollContainerRef} className="flex-1 overflow-y-auto p-0">
         {trades.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-8">
             <Eye className="h-12 w-12 text-white/20 mb-4" />

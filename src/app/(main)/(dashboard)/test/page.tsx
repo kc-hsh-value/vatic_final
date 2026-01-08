@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ExternalLink, RefreshCw, Zap, Settings2, TrendingUp, AlertTriangle } from "lucide-react";
+import { ExternalLink, RefreshCw, Zap, Settings2, TrendingUp, AlertTriangle, Eye } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -74,6 +74,44 @@ export default function FeedPage() {
   
   // Manage Sources Modal State
   const [manageOpen, setManageOpen] = useState(false);
+
+  // Whale watching filter states - lifted to parent to allow TweetCard to update them
+  const [whaleFilters, setWhaleFilters] = useState<{
+    eventSlugs: string[];
+    marketSlugs: string[];
+  }>({
+    eventSlugs: [],
+    marketSlugs: [],
+  });
+
+  // Function to add slugs from a tweet correlation to whale watching
+  const watchWhalesForTweet = (markets: Market[]) => {
+    const eventSlugs = [...new Set(markets.map(m => m.slug).filter(Boolean))];
+    const marketSlugs = [...new Set(markets.map(m => m.market_slug).filter(Boolean))];
+    
+    setWhaleFilters({
+      eventSlugs,
+      marketSlugs,
+    });
+
+    toast.success(`Watching ${eventSlugs.length} event(s) and ${marketSlugs.length} market(s) for whale activity`);
+  };
+
+  // Helper function to check if a tweet's markets are being watched
+  const isBeingWatched = (markets: Market[]): boolean => {
+    if (whaleFilters.eventSlugs.length === 0 && whaleFilters.marketSlugs.length === 0) {
+      return false;
+    }
+
+    const tweetEventSlugs = markets.map(m => m.slug).filter(Boolean);
+    const tweetMarketSlugs = markets.map(m => m.market_slug).filter(Boolean);
+
+    // Check if any of this tweet's slugs match the current whale filters
+    const eventMatch = tweetEventSlugs.some(slug => whaleFilters.eventSlugs.includes(slug));
+    const marketMatch = tweetMarketSlugs.some(slug => whaleFilters.marketSlugs.includes(slug));
+
+    return eventMatch || marketMatch;
+  };
 
   // useEffect(() => {
   //   if (!auth.authenticated || !auth.userId) return;
@@ -216,7 +254,7 @@ export default function FeedPage() {
             </TabsList>
 
             <TabsContent value="global" className="mt-6 space-y-4 min-h-[50vh]">
-              <FeedList items={items} loading={loading} />
+              <FeedList items={items} loading={loading} onWatchWhales={watchWhalesForTweet} isBeingWatched={isBeingWatched} />
             </TabsContent>
             
             <TabsContent value="following" className="mt-6 space-y-4 min-h-[50vh]">
@@ -228,7 +266,7 @@ export default function FeedPage() {
                      </Button>
                   </div>
                ) : (
-                 <FeedList items={items} loading={loading} />
+                 <FeedList items={items} loading={loading} onWatchWhales={watchWhalesForTweet} isBeingWatched={isBeingWatched} />
                )}
             </TabsContent>
           </Tabs>
@@ -250,7 +288,10 @@ export default function FeedPage() {
         {/* Mobile: Normal flow with fixed height, Desktop: Independent scroll in 40% column */}
         <div className="w-full lg:w-[40%] h-[600px] lg:h-full">
           {/* Mobile: 600px fixed height, Desktop: Full height with independent scroll */}
-          <WhaleWatching />
+          <WhaleWatching 
+            externalEventSlugs={whaleFilters.eventSlugs}
+            externalMarketSlugs={whaleFilters.marketSlugs}
+          />
         </div>
         
       </div>
@@ -263,7 +304,12 @@ export default function FeedPage() {
 
 // --- Sub-Components ---
 
-function FeedList({ items, loading }: { items: TweetCorrelation[]; loading: boolean }) {
+function FeedList({ items, loading, onWatchWhales, isBeingWatched }: { 
+  items: TweetCorrelation[]; 
+  loading: boolean; 
+  onWatchWhales: (markets: Market[]) => void;
+  isBeingWatched: (markets: Market[]) => boolean;
+}) {
   if (loading && items.length === 0) {
     return <div className="space-y-4">{[1, 2, 3].map((i) => <FeedItemSkeleton key={i} />)}</div>;
   }
@@ -271,13 +317,22 @@ function FeedList({ items, loading }: { items: TweetCorrelation[]; loading: bool
   return (
     <div className="space-y-4 sm:space-y-6">
       {items.map((item) => (
-        <TweetCard key={item.tweet_id} data={item} />
+        <TweetCard 
+          key={item.tweet_id} 
+          data={item} 
+          onWatchWhales={onWatchWhales} 
+          isBeingWatched={isBeingWatched(item.markets)}
+        />
       ))}
     </div>
   );
 }
 
-function TweetCard({ data }: { data: TweetCorrelation }) {
+function TweetCard({ data, onWatchWhales, isBeingWatched }: { 
+  data: TweetCorrelation; 
+  onWatchWhales: (markets: Market[]) => void;
+  isBeingWatched: boolean;
+}) {
   // 1. Group markets
   const groupedMarkets = data.markets.reduce((acc, market) => {
     const key = market.slug || "unknown-event";
@@ -293,7 +348,11 @@ function TweetCard({ data }: { data: TweetCorrelation }) {
   const { data: prices } = usePolymarketPrices(allTokenIds);
 
   return (
-    <Card className="border border-white/10 bg-[#0F1115] shadow-lg overflow-hidden transition-all hover:border-white/20">
+    <Card className={`border shadow-lg overflow-hidden transition-all ${
+      isBeingWatched 
+        ? 'border-purple-500/50 bg-[#0F1115] ring-2 ring-purple-500/20' 
+        : 'border-white/10 bg-[#0F1115] hover:border-white/20'
+    }`}>
       
       {/* --- Tweet Content Section --- */}
       <div className="p-4 flex flex-row gap-4">
@@ -315,6 +374,20 @@ function TweetCard({ data }: { data: TweetCorrelation }) {
                     <span className="text-white/40 text-xs whitespace-nowrap">• {formatDistanceToNow(new Date(data.published_at))} ago</span>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Button 
+                      size="sm" 
+                      variant={isBeingWatched ? "default" : "outline"}
+                      onClick={() => onWatchWhales(data.markets)}
+                      className={`h-7 text-xs transition-all ${
+                        isBeingWatched
+                          ? 'bg-purple-500 hover:bg-purple-600 text-white'
+                          : 'border-purple-500/20 hover:bg-purple-500/10 hover:border-purple-500/40 text-purple-400 hover:text-purple-300'
+                      }`}
+                      title={isBeingWatched ? "Currently monitoring whale activity" : "Monitor whale activity for these markets"}
+                    >
+                      <Eye className={`h-3 w-3 mr-1 ${isBeingWatched ? 'animate-pulse' : ''}`} />
+                      {isBeingWatched ? 'Watching' : 'Watch Whales'}
+                    </Button>
                     <UrgencyBadge score={data.max_urgency} />
                     <Link href={data.tweet_url} target="_blank" className="text-white/20 hover:text-blue-400 transition-colors">
                         <ExternalLink className="h-3.5 w-3.5" />
