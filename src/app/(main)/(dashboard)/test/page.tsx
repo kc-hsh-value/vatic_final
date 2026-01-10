@@ -35,6 +35,8 @@ type Market = {
   price_change_1h?: number;
   price_change_12h?: number;
   price_change_24h?: number;
+  event_id: string;
+  condition_id: string;
 };
 
 type TweetCorrelation = {
@@ -76,39 +78,73 @@ export default function FeedPage() {
   const [manageOpen, setManageOpen] = useState(false);
 
   // Whale watching filter states - lifted to parent to allow TweetCard to update them
+  // Structure to preserve event-market relationships and event IDs
   const [whaleFilters, setWhaleFilters] = useState<{
-    eventSlugs: string[];
-    marketSlugs: string[];
+    events: Array<{
+      eventSlug: string;
+      eventId: string;
+      markets: Array<{
+        marketSlug: string;
+        marketId: string;
+        conditionId: string;
+      }>;
+    }>;
   }>({
-    eventSlugs: [],
-    marketSlugs: [],
+    events: [],
   });
 
   // Function to add slugs from a tweet correlation to whale watching
   const watchWhalesForTweet = (markets: Market[]) => {
-    const eventSlugs = [...new Set(markets.map(m => m.slug).filter(Boolean))];
-    const marketSlugs = [...new Set(markets.map(m => m.market_slug).filter(Boolean))];
+    // console.log("Watching whales for markets:", markets);
+    
+    // Group markets by event (slug)
+    console.log("markets before: ", markets);
+    const eventGroups = markets.reduce((acc, market) => {
+      const eventSlug = market.slug;
+      if (!acc[eventSlug]) {
+        acc[eventSlug] = {
+          eventSlug: eventSlug,
+          eventId: market.event_id,
+          markets: []
+        };
+      }
+      acc[eventSlug].markets.push({
+        marketSlug: market.market_slug,
+        marketId: market.market_id,
+        conditionId: market.condition_id,
+        outcomes: market.outcomes,
+        clobTokenIds: market.clobTokenIds
+      });
+      return acc;
+    }, {} as Record<string, { eventSlug: string; eventId: string; markets: Array<{ marketSlug: string; marketId: string; conditionId: string; outcomes?: string[]; clobTokenIds?: string[] }> }>);
+    
+    const events = Object.values(eventGroups);
+    console.log("events after: ", events);
     
     setWhaleFilters({
-      eventSlugs,
-      marketSlugs,
+      events
     });
 
-    toast.success(`Watching ${eventSlugs.length} event(s) and ${marketSlugs.length} market(s) for whale activity`);
+    const totalMarkets = events.reduce((sum, e) => sum + e.markets.length, 0);
+    toast.success(`Watching ${events.length} event(s) with ${totalMarkets} market(s) for whale activity`);
   };
 
   // Helper function to check if a tweet's markets are being watched
   const isBeingWatched = (markets: Market[]): boolean => {
-    if (whaleFilters.eventSlugs.length === 0 && whaleFilters.marketSlugs.length === 0) {
+    if (whaleFilters.events.length === 0) {
       return false;
     }
+
+    // Get all watched event and market slugs
+    const watchedEventSlugs = whaleFilters.events.map(e => e.eventSlug);
+    const watchedMarketSlugs = whaleFilters.events.flatMap(e => e.markets.map(m => m.marketSlug));
 
     const tweetEventSlugs = markets.map(m => m.slug).filter(Boolean);
     const tweetMarketSlugs = markets.map(m => m.market_slug).filter(Boolean);
 
     // Check if any of this tweet's slugs match the current whale filters
-    const eventMatch = tweetEventSlugs.some(slug => whaleFilters.eventSlugs.includes(slug));
-    const marketMatch = tweetMarketSlugs.some(slug => whaleFilters.marketSlugs.includes(slug));
+    const eventMatch = tweetEventSlugs.some(slug => watchedEventSlugs.includes(slug));
+    const marketMatch = tweetMarketSlugs.some(slug => watchedMarketSlugs.includes(slug));
 
     return eventMatch || marketMatch;
   };
@@ -289,8 +325,7 @@ export default function FeedPage() {
         <div className="w-full lg:w-[40%] h-[600px] lg:h-full">
           {/* Mobile: 600px fixed height, Desktop: Full height with independent scroll */}
           <WhaleWatching 
-            externalEventSlugs={whaleFilters.eventSlugs}
-            externalMarketSlugs={whaleFilters.marketSlugs}
+            selectedEvents={whaleFilters.events}
           />
         </div>
         
@@ -341,7 +376,7 @@ function TweetCard({ data, onWatchWhales, isBeingWatched }: {
     return acc;
   }, {} as Record<string, typeof data.markets>);
 
-  console.log("groupedMarkets: ", groupedMarkets);
+  // console.log("groupedMarkets: ", groupedMarkets);
 
   // 2. Extract Token IDs for Prices
   const allTokenIds = data.markets.flatMap((m) => m.clobTokenIds || []);

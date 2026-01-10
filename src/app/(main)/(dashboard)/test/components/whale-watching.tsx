@@ -5,10 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Eye, DollarSign, TrendingUp, TrendingDown, Activity, Settings, ChevronDown, ChevronUp, Filter } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Eye, DollarSign, TrendingUp, TrendingDown, Activity, Settings, ChevronDown, ChevronUp, Filter, Users } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import Image from "next/image";
+import { WhaleHistory } from "./whale-history";
+import { TopHolders } from "./top-holders";
 
 /**
  * Trade Message Interface based on Polymarket WebSocket API
@@ -43,21 +46,42 @@ interface TradeMessage {
 }
 
 /**
- * Whale Watching Component
- * Connects to Polymarket WebSocket to display real-time large trades
+ * Structured event data with market relationships
  */
+export interface WatchedEvent {
+  eventSlug: string;
+  eventId: string;
+  markets: Array<{
+    marketSlug: string;
+    marketId: string;
+    conditionId: string;
+    outcomes?: string[];
+    clobTokenIds?: string[];
+  }>;
+}
+
 export function WhaleWatching({ 
-  externalEventSlugs = [], 
-  externalMarketSlugs = [] 
+  selectedEvents = []
 }: { 
-  externalEventSlugs?: string[]; 
-  externalMarketSlugs?: string[];
+  selectedEvents?: WatchedEvent[];
 }) {
+  console.log("selectedEvents:", selectedEvents);
   // --- State Management ---
   const [trades, setTrades] = useState<TradeMessage[]>([]);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<string>("live");
+  
+  // History tab state (persisted across tab switches)
+  const [historyTrades, setHistoryTrades] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
+  const [historyCurrentPage, setHistoryCurrentPage] = useState<number>(1);
+  
+  // Holders tab state (persisted across tab switches)
+  const [holdersData, setHoldersData] = useState<any[]>([]);
+  const [isLoadingHolders, setIsLoadingHolders] = useState<boolean>(false);
+  const [holdersCurrentPage, setHoldersCurrentPage] = useState<number>(1);
   
   // Filter states
   const [minValue, setMinValue] = useState<number>(1000); // Minimum trade value
@@ -374,13 +398,17 @@ export function WhaleWatching({
 
   // Apply external filters when they change (from parent component)
   useEffect(() => {
-    if (externalEventSlugs.length > 0 || externalMarketSlugs.length > 0) {
-      setEventSlug(externalEventSlugs.join(', '));
-      setMarketSlug(externalMarketSlugs.join(', '));
+    if (selectedEvents.length > 0) {
+      // Extract all event and market slugs from the structured data
+      const eventSlugs = selectedEvents.map(e => e.eventSlug).join(', ');
+      const marketSlugs = selectedEvents.flatMap(e => e.markets.map(m => m.marketSlug)).join(', ');
+      
+      setEventSlug(eventSlugs);
+      setMarketSlug(marketSlugs);
       setShowFilters(true); // Auto-expand filters to show what was applied
       setTrades([]); // Clear existing trades
     }
-  }, [externalEventSlugs, externalMarketSlugs]);
+  }, [selectedEvents]);
 
   // Maintain scroll position when new trades are added at the top
   useEffect(() => {
@@ -433,7 +461,8 @@ export function WhaleWatching({
           </div>
         </div>
 
-        {/* --- Filter Controls --- */}
+        {/* --- Filter Controls (Only for Live Trades tab) --- */}
+        {activeTab === "live" && (
         <div className="space-y-3 mt-4">
           {/* Quick Filters Row */}
           <div className="flex items-center gap-2">
@@ -677,120 +706,169 @@ export function WhaleWatching({
             </div>
           )}
         </div>
+        )}
       </CardHeader>
 
-      {/* --- Trades List Section with Independent Scroll --- */}
-      {/* This section scrolls independently from the Alpha Feed */}
-      {/* Ref attached for scroll position management when new trades arrive */}
-      <CardContent ref={scrollContainerRef} className="flex-1 overflow-y-auto p-0">
-        {trades.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center p-8">
-            <Eye className="h-12 w-12 text-white/20 mb-4" />
-            <p className="text-white/40 text-sm">
-              {isConnected 
-                ? `Waiting for trades ≥ $${minValue.toLocaleString()}...` 
-                : "Connecting to Polymarket..."}
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-white/5">
-            {trades.map((trade, idx) => {
-              const tradeValue = trade.payload.size * trade.payload.price;
-              const isBuy = trade.payload.side === "BUY";
-              
-              return (
-                <div 
-                  key={`${trade.payload.transactionHash}-${idx}`}
-                  className="p-4 hover:bg-white/5 transition-colors"
-                >
-                  {/* Trade Header: User & Time */}
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      {trade.payload.profileImage ? (
-                        <Image 
-                          src={trade.payload.profileImage} 
-                          alt={trade.payload.name}
-                          width={24}
-                          height={24}
-                          className="h-6 w-6 rounded-full border border-white/10"
-                        />
-                      ) : (
-                        <div className="h-6 w-6 rounded-full bg-purple-500/20 border border-purple-500/20" />
-                      )}
-                      {/* Clickable username - links to user's address page */}
-                      <Link
-                        target="_blank"
-                        href={`/address/${trade.payload.proxyWallet}`}
-                        className="text-sm font-medium text-white/90 hover:text-purple-400 transition-colors"
-                      >
-                        {trade.payload.pseudonym || trade.payload.name || "Anonymous"}
-                      </Link>
-                    </div>
-                    <span className="text-xs text-white/40">
-                      {/* Convert Unix timestamp (seconds) to milliseconds for date-fns */}
-                      {formatDistanceToNow(trade.payload.timestamp * 1000)} ago
-                    </span>
-                  </div>
+      {/* --- Tabs Section --- */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+        <TabsList className="w-full justify-start border-b border-white/10 bg-transparent rounded-none h-12 px-4">
+          <TabsTrigger value="live" className="gap-2">
+            <Activity className="h-4 w-4" />
+            Live Trades
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-2">
+            <Activity className="h-4 w-4" />
+            Recent History
+          </TabsTrigger>
+          <TabsTrigger value="holders" className="gap-2">
+            <Users className="h-4 w-4" />
+            Top Holders
+          </TabsTrigger>
+        </TabsList>
 
-                  {/* Trade Details */}
-                  <div className="space-y-2">
-                    {/* Market Title */}
-                    <Link
-                      href={`https://polymarket.com/event/${trade.payload.eventSlug}/${trade.payload.slug}`}
-                      target="_blank"
-                      className="text-sm text-white/80 hover:text-blue-400 transition-colors line-clamp-2 block"
+        {/* Live Trades Tab */}
+        <TabsContent value="live" className="flex-1 overflow-hidden m-0">
+          <CardContent ref={scrollContainerRef} className="h-full overflow-y-auto p-0">
+            {trades.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                <Eye className="h-12 w-12 text-white/20 mb-4" />
+                <p className="text-white/40 text-sm">
+                  {isConnected 
+                    ? `Waiting for trades ≥ $${minValue.toLocaleString()}...` 
+                    : "Connecting to Polymarket..."}
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {trades.map((trade, idx) => {
+                  const tradeValue = trade.payload.size * trade.payload.price;
+                  const isBuy = trade.payload.side === "BUY";
+                  
+                  return (
+                    <div 
+                      key={`${trade.payload.transactionHash}-${idx}`}
+                      className="p-4 hover:bg-white/5 transition-colors"
                     >
-                      {trade.payload.title}
-                    </Link>
-
-                    {/* Trade Info Grid */}
-                    <div className="grid grid-cols-2 gap-2">
-                      {/* Side & Outcome */}
-                      <div className="flex items-center gap-2">
-                        {isBuy ? (
-                          <TrendingUp className="h-4 w-4 text-green-400" />
-                        ) : (
-                          <TrendingDown className="h-4 w-4 text-red-400" />
-                        )}
-                        <span className={`text-xs font-bold ${isBuy ? 'text-green-400' : 'text-red-400'}`}>
-                          {trade.payload.side}
-                        </span>
-                        <span className="text-xs text-white/60">
-                          {trade.payload.outcome}
-                        </span>
-                      </div>
-
-                      {/* Price */}
-                      <div className="text-right">
-                        <span className="text-xs text-white/40">Price: </span>
-                        <span className="text-xs font-mono font-bold text-white/90">
-                          {(trade.payload.price * 100).toFixed(1)}¢
-                        </span>
-                      </div>
-
-                      {/* Size */}
-                      <div>
-                        <span className="text-xs text-white/40">Size: </span>
-                        <span className="text-xs font-mono text-white/80">
-                          {trade.payload.size.toLocaleString()} shares
+                      {/* Trade Header: User & Time */}
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {trade.payload.profileImage ? (
+                            <Image 
+                              src={trade.payload.profileImage} 
+                              alt={trade.payload.name}
+                              width={24}
+                              height={24}
+                              className="h-6 w-6 rounded-full border border-white/10"
+                            />
+                          ) : (
+                            <div className="h-6 w-6 rounded-full bg-purple-500/20 border border-purple-500/20" />
+                          )}
+                          {/* Clickable username - links to user's address page */}
+                          <Link
+                            target="_blank"
+                            href={`/address/${trade.payload.proxyWallet}`}
+                            className="text-sm font-medium text-white/90 hover:text-purple-400 transition-colors"
+                          >
+                            {trade.payload.pseudonym || trade.payload.name || "Anonymous"}
+                          </Link>
+                        </div>
+                        <span className="text-xs text-white/40">
+                          {/* Convert Unix timestamp (seconds) to milliseconds for date-fns */}
+                          {formatDistanceToNow(trade.payload.timestamp * 1000)} ago
                         </span>
                       </div>
 
-                      {/* Total Value - Highlighted */}
-                      <div className="text-right">
-                        <span className="text-xs text-white/40">Value: </span>
-                        <span className="text-sm font-mono font-bold text-purple-400">
-                          ${tradeValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                      {/* Trade Details */}
+                      <div className="space-y-2">
+                        {/* Market Title */}
+                        <Link
+                          href={`https://polymarket.com/event/${trade.payload.eventSlug}/${trade.payload.slug}`}
+                          target="_blank"
+                          className="text-sm text-white/80 hover:text-blue-400 transition-colors line-clamp-2 block"
+                        >
+                          {trade.payload.title}
+                        </Link>
+
+                        {/* Trade Info Grid */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {/* Side & Outcome */}
+                          <div className="flex items-center gap-2">
+                            {isBuy ? (
+                              <TrendingUp className="h-4 w-4 text-green-400" />
+                            ) : (
+                              <TrendingDown className="h-4 w-4 text-red-400" />
+                            )}
+                            <span className={`text-xs font-bold ${isBuy ? 'text-green-400' : 'text-red-400'}`}>
+                              {trade.payload.side}
+                            </span>
+                            <span className="text-xs text-white/60">
+                              {trade.payload.outcome}
+                            </span>
+                          </div>
+
+                          {/* Price */}
+                          <div className="text-right">
+                            <span className="text-xs text-white/40">Price: </span>
+                            <span className="text-xs font-mono font-bold text-white/90">
+                              {(trade.payload.price * 100).toFixed(1)}¢
+                            </span>
+                          </div>
+
+                          {/* Size */}
+                          <div>
+                            <span className="text-xs text-white/40">Size: </span>
+                            <span className="text-xs font-mono text-white/80">
+                              {trade.payload.size.toLocaleString()} shares
+                            </span>
+                          </div>
+
+                          {/* Total Value - Highlighted */}
+                          <div className="text-right">
+                            <span className="text-xs text-white/40">Value: </span>
+                            <span className="text-sm font-mono font-bold text-purple-400">
+                              ${tradeValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </TabsContent>
+
+        {/* Historical Trades Tab - Placeholder */}
+        <TabsContent value="history" className="flex-1 overflow-hidden m-0">
+          <CardContent className="h-full overflow-y-auto p-0">
+            <WhaleHistory 
+              selectedEvents={selectedEvents}
+              tradeHistory={historyTrades}
+              setTradeHistory={setHistoryTrades}
+              isLoadingTrades={isLoadingHistory}
+              setIsLoadingTrades={setIsLoadingHistory}
+              currentPage={historyCurrentPage}
+              setCurrentPage={setHistoryCurrentPage}
+            />
+          </CardContent>
+        </TabsContent>
+
+        {/* Top Holders Tab */}
+        <TabsContent value="holders" className="flex-1 overflow-hidden m-0">
+          <CardContent className="h-full overflow-y-auto p-0">
+            <TopHolders
+              selectedEvents={selectedEvents}
+              holdersData={holdersData}
+              setHoldersData={setHoldersData}
+              isLoadingHolders={isLoadingHolders}
+              setIsLoadingHolders={setIsLoadingHolders}
+              currentPage={holdersCurrentPage}
+              setCurrentPage={setHoldersCurrentPage}
+            />
+          </CardContent>
+        </TabsContent>
+      </Tabs>
     </Card>
   );
 }
