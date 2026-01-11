@@ -113,10 +113,11 @@ export default function FeedPage() {
         marketId: market.market_id,
         conditionId: market.condition_id,
         outcomes: market.outcomes,
-        clobTokenIds: market.clobTokenIds
+        clobTokenIds: market.clobTokenIds,
+        question: market.question
       });
       return acc;
-    }, {} as Record<string, { eventSlug: string; eventId: string; markets: Array<{ marketSlug: string; marketId: string; conditionId: string; outcomes?: string[]; clobTokenIds?: string[] }> }>);
+    }, {} as Record<string, { eventSlug: string; eventId: string; markets: Array<{ marketSlug: string; marketId: string; conditionId: string; outcomes?: string[]; clobTokenIds?: string[]; question?: string }> }>);
     
     const events = Object.values(eventGroups);
     console.log("events after: ", events);
@@ -212,7 +213,7 @@ export default function FeedPage() {
       setLoading(false);
       return;
     }
-
+    console.log("Feed loaded:", res);
     const newItems = res.data as TweetCorrelation[];
 
     if (reset) {

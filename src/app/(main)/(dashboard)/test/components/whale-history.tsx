@@ -55,6 +55,9 @@ export function WhaleHistory({
 
   // Track if the selection panel is collapsed (default to collapsed for cleaner UI)
   const [isSelectionCollapsed, setIsSelectionCollapsed] = useState<boolean>(true);
+  
+  // Track if the filters panel is collapsed (default to collapsed for cleaner UI)
+  const [isFiltersCollapsed, setIsFiltersCollapsed] = useState<boolean>(true);
 
   // Trade history API filters (passed from parent or defaults)
   const [takerOnly, setTakerOnly] = useState<boolean>(true);
@@ -502,6 +505,118 @@ export function WhaleHistory({
         )}
       </Button>
 
+      {/* Filter Controls */}
+      <Card className="bg-[#1a1b23] border-white/10">
+        <CardContent className="p-3">
+          {/* Collapsible Header */}
+          <button
+            onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
+            className="flex items-center gap-2 hover:bg-white/5 px-2 py-1 rounded transition-colors w-full"
+          >
+            {isFiltersCollapsed ? (
+              <ChevronRight className="h-4 w-4 text-purple-400" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-purple-400" />
+            )}
+            <Filter className="h-4 w-4 text-purple-400" />
+            <h4 className="text-sm font-semibold text-white">Filters</h4>
+            {(tradeSide || filterType || tradeUser || !takerOnly) && (
+              <span className="ml-auto text-xs text-purple-400 font-medium">
+                {[tradeSide && 'Side', filterType && 'Amount', tradeUser && 'User', !takerOnly && 'All Trades'].filter(Boolean).length} active
+              </span>
+            )}
+          </button>
+          
+          {/* Collapsible Content */}
+          {!isFiltersCollapsed && (
+            <div className="mt-3 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Trade Side Filter */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-white/60 font-medium">Trade Side</label>
+              <select
+                value={tradeSide}
+                onChange={(e) => setTradeSide(e.target.value as 'buy' | 'sell' | '')}
+                className="w-full h-8 px-2 text-xs bg-black/40 border border-white/10 rounded text-white focus:border-purple-500/40 focus:outline-none"
+              >
+                <option value="">All Sides</option>
+                <option value="buy">BUY Only</option>
+                <option value="sell">SELL Only</option>
+              </select>
+            </div>
+
+            {/* Filter Type (Min/Max Amount) */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-white/60 font-medium">Amount Filter</label>
+              <div className="flex gap-2">
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value as 'cash' | 'tokens' | '')}
+                  className="flex-1 h-8 px-2 text-xs bg-black/40 border border-white/10 rounded text-white focus:border-purple-500/40 focus:outline-none"
+                >
+                  <option value="">No Filter</option>
+                  <option value="cash">Min Cash ($)</option>
+                  <option value="tokens">Min Tokens</option>
+                </select>
+                {filterType && (
+                  <Input
+                    type="number"
+                    placeholder={filterType === 'cash' ? 'Min $' : 'Min tokens'}
+                    value={filterAmount}
+                    onChange={(e) => setFilterAmount(e.target.value)}
+                    className="w-24 h-8 px-2 text-xs bg-black/40 border-white/10 text-white placeholder:text-white/30"
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Specific User Address */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-white/60 font-medium">User Address</label>
+              <Input
+                type="text"
+                placeholder="Filter by address..."
+                value={tradeUser}
+                onChange={(e) => setTradeUser(e.target.value)}
+                className="w-full h-8 px-2 text-xs bg-black/40 border-white/10 text-white placeholder:text-white/30"
+              />
+            </div>
+
+            {/* Taker Only Checkbox */}
+            <div className="flex items-center gap-2 pt-5">
+              <Checkbox
+                id="taker-only"
+                checked={takerOnly}
+                onCheckedChange={(checked) => setTakerOnly(checked as boolean)}
+              />
+              <label htmlFor="taker-only" className="text-xs text-white/80 cursor-pointer">
+                Taker trades only
+              </label>
+            </div>
+              </div>
+
+              {/* Clear Filters Button */}
+              {(tradeSide || filterType || tradeUser || !takerOnly) && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setTradeSide('');
+                    setFilterType('');
+                    setFilterAmount('');
+                    setTradeUser('');
+                    setTakerOnly(true);
+                  }}
+                  className="h-7 text-xs text-white/60 hover:text-white w-full"
+                >
+                  Clear All Filters
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Results Area */}
       <Card className="flex-1 bg-[#1a1b23] border-white/10 overflow-hidden">
         <CardContent className="p-4 h-full">
@@ -513,28 +628,33 @@ export function WhaleHistory({
             <div className="h-full flex flex-col">
               {/* Pagination Header */}
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-white/60">
-                  Found {tradeHistory.length} trades (Page {currentPage}/{Math.ceil(tradeHistory.length / tradesPerPage)})
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    className="h-7 text-xs text-white/60 hover:text-white disabled:opacity-30"
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={currentPage >= Math.ceil(tradeHistory.length / tradesPerPage)}
-                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(tradeHistory.length / tradesPerPage), p + 1))}
-                    className="h-7 text-xs text-white/60 hover:text-white disabled:opacity-30"
-                  >
-                    Next
-                  </Button>
+                <h3 className="text-lg font-semibold text-white">
+                  Found {tradeHistory.length} trade{tradeHistory.length === 1 ? '' : 's'}
+                </h3>
+                <div className="flex items-center gap-3">
+                  <p className="text-xs text-white/60">
+                    Page {currentPage}/{Math.ceil(tradeHistory.length / tradesPerPage)}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      className="h-7 text-xs text-white/60 hover:text-white disabled:opacity-30"
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={currentPage >= Math.ceil(tradeHistory.length / tradesPerPage)}
+                      onClick={() => setCurrentPage(p => Math.min(Math.ceil(tradeHistory.length / tradesPerPage), p + 1))}
+                      className="h-7 text-xs text-white/60 hover:text-white disabled:opacity-30"
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </div>
               </div>
               <ScrollArea className="flex-1">

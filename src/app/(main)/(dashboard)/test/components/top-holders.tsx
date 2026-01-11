@@ -19,6 +19,7 @@ export interface WatchedEvent {
     conditionId: string;
     outcomes?: string[];
     clobTokenIds?: string[];
+    question?: string;
   }>;
 }
 
@@ -34,6 +35,17 @@ interface HolderData {
   profileImage: string;
   profileImageOptimized: string;
   verified: boolean;
+}
+
+interface HolderPnLData {
+  proxyWallet: string;
+  dailyPnl: number | null;
+  weeklyPnl: number | null;
+  monthlyPnl: number | null;
+  allTimePnl: number | null;
+  marketsTraded: number | null;
+  isLoading: boolean;
+  error?: string;
 }
 
 interface TokenHolders {
@@ -77,6 +89,16 @@ export function TopHolders({
   // Track if the selection panel is collapsed (default to collapsed for cleaner UI)
   const [isSelectionCollapsed, setIsSelectionCollapsed] = useState<boolean>(true);
 
+  // Market dropdown and outcome tabs state
+  const [selectedMarketForView, setSelectedMarketForView] = useState<string | null>(null);
+  const [selectedOutcomeTab, setSelectedOutcomeTab] = useState<number>(0);
+
+  // PnL data state - Map wallet address to PnL data
+  const [holderPnLData, setHolderPnLData] = useState<Map<string, HolderPnLData>>(new Map());
+  
+  // Track which wallets are currently being fetched
+  const [fetchingWallets, setFetchingWallets] = useState<Set<string>>(new Set());
+
   // Pagination config (state managed by parent)
   const holdersPerPage = 20;
 
@@ -110,8 +132,226 @@ export function TopHolders({
     }
   }, [selectedEvents]);
 
+  // Auto-select first market when holders data loads
+  useEffect(() => {
+    if (holdersData.length > 0 && !selectedMarketForView) {
+      const firstMarketSlug = holdersData[0]?.outcomeInfo?.marketSlug;
+      if (firstMarketSlug) {
+        setSelectedMarketForView(firstMarketSlug);
+        setSelectedOutcomeTab(0);
+      }
+    }
+  }, [holdersData, selectedMarketForView]);
+
+  // Fetch PnL data ONLY for the selected market's holders (on-demand)
+  useEffect(() => {
+    if (!selectedMarketForView || holdersData.length === 0) return;
+
+    // Get holders only from the selected market
+    const selectedMarketHolders = holdersData
+      .filter(t => t.outcomeInfo?.marketSlug === selectedMarketForView)
+      .flatMap(t => t.holders);
+
+    // Extract unique wallets from selected market only
+    const selectedWallets = new Set<string>();
+    selectedMarketHolders.forEach(holder => {
+      selectedWallets.add(holder.proxyWallet.toLowerCase());
+    });
+
+    // Filter out wallets we already have data for or are currently fetching
+    const walletsToFetch = Array.from(selectedWallets).filter(wallet => {
+      const existing = holderPnLData.get(wallet);
+      return !existing && !fetchingWallets.has(wallet);
+    });
+
+    if (walletsToFetch.length === 0) return;
+
+    console.log(`💰 Fetching PnL for ${walletsToFetch.length} wallets from selected market (concurrency: 25)...`);
+    
+    // Fetch PnL only for selected market holders
+    fetchPnLConcurrently(walletsToFetch, 25).then(() => {
+      console.log(`✅ PnL fetch complete for ${walletsToFetch.length} wallets`);
+    });
+  }, [selectedMarketForView, holdersData, holderPnLData, fetchingWallets]);
+
+
   // Check if user has selected any markets to watch
   const hasSelectedMarkets = selectedEvents.length > 0;
+
+  // ===== PnL Fetching Utilities =====
+  
+  // Fetch PnL series for a wallet with specific interval and fidelity (with retry logic)
+  const fetchPnlSeries = async (wallet: string, interval: string, fidelity: string, retries = 2) => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const res = await fetch(
+          `https://user-pnl-api.polymarket.com/user-pnl?user_address=${wallet.toLowerCase()}&interval=${interval}&fidelity=${fidelity}`
+        );
+        
+        // Retry on rate limit or server errors
+        if (res.status === 429 || res.status >= 500) {
+          if (attempt < retries) {
+            await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+            continue;
+          }
+          return null;
+        }
+        
+        if (!res.ok) return null;
+        const data = await res.json();
+        return Array.isArray(data) ? data : null;
+      } catch (error) {
+        if (attempt < retries) {
+          await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+          continue;
+        }
+        return null;
+      }
+    }
+    return null;
+  };
+
+  // Compute all-time PnL (last point's value)
+  const computeAllTimePnl = (series: any[] | null): number | null => {
+    if (!series || series.length === 0) return null;
+    const sorted = series
+      .filter(x => Number.isFinite(x?.t) && Number.isFinite(x?.p))
+      .sort((a, b) => a.t - b.t);
+    if (sorted.length === 0) return null;
+    return sorted[sorted.length - 1].p;
+  };
+
+  // Compute delta PnL (last - first)
+  const computeDeltaPnl = (series: any[] | null): number | null => {
+    if (!series || series.length < 2) return null;
+    const sorted = series
+      .filter(x => Number.isFinite(x?.t) && Number.isFinite(x?.p))
+      .sort((a, b) => a.t - b.t);
+    if (sorted.length < 2) return null;
+    return sorted[sorted.length - 1].p - sorted[0].p;
+  };
+
+  // Fetch markets traded for a wallet (with retry logic)
+  const fetchMarketsTraded = async (wallet: string, retries = 2): Promise<number | null> => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const res = await fetch(`https://data-api.polymarket.com/traded?user=${wallet.toLowerCase()}`);
+        
+        if (res.status === 429 || res.status >= 500) {
+          if (attempt < retries) {
+            await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+            continue;
+          }
+          return null;
+        }
+        
+        if (!res.ok) return null;
+        const json = await res.json();
+        return typeof json?.traded === 'number' ? json.traded : null;
+      } catch (error) {
+        if (attempt < retries) {
+          await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+          continue;
+        }
+        return null;
+      }
+    }
+    return null;
+  };
+
+  // Fetch complete PnL data for a single wallet
+  const fetchWalletPnL = async (wallet: string): Promise<HolderPnLData> => {
+    try {
+      const [daily, weekly, monthly, allTime, marketsTraded] = await Promise.all([
+        fetchPnlSeries(wallet, '1d', '1h'),
+        fetchPnlSeries(wallet, '1w', '1h'),
+        fetchPnlSeries(wallet, '1m', '1h'),
+        fetchPnlSeries(wallet, 'all', '12h'),
+        fetchMarketsTraded(wallet)
+      ]);
+
+      return {
+        proxyWallet: wallet,
+        dailyPnl: computeDeltaPnl(daily),
+        weeklyPnl: computeDeltaPnl(weekly),
+        monthlyPnl: computeDeltaPnl(monthly),
+        allTimePnl: computeAllTimePnl(allTime),
+        marketsTraded,
+        isLoading: false
+      };
+    } catch (error) {
+      return {
+        proxyWallet: wallet,
+        dailyPnl: null,
+        weeklyPnl: null,
+        monthlyPnl: null,
+        allTimePnl: null,
+        marketsTraded: null,
+        isLoading: false,
+        error: 'Failed to fetch PnL'
+      };
+    }
+  };
+
+  // Fetch PnL for multiple wallets with concurrency control
+  const fetchPnLConcurrently = async (wallets: string[], concurrency = 25) => {
+    const results: HolderPnLData[] = [];
+    const active = new Set<Promise<void>>();
+    const queue = [...wallets];
+    let processedCount = 0;
+
+    const processNext = async () => {
+      while (queue.length > 0) {
+        const wallet = queue.shift()!;
+
+        // Wait if at max concurrency
+        while (active.size >= concurrency) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        // Add small delay every 25 requests to reduce load
+        if (processedCount > 0 && processedCount % 25 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        const promise = (async () => {
+          try {
+            const result = await fetchWalletPnL(wallet);
+            results.push(result);
+            processedCount++;
+            
+            // Update state immediately as each wallet completes
+            setHolderPnLData(prev => {
+              const newMap = new Map(prev);
+              newMap.set(wallet.toLowerCase(), result);
+              return newMap;
+            });
+          } catch (error) {
+            console.error(`Failed to fetch PnL for ${wallet}:`, error);
+            processedCount++;
+          }
+        })();
+        
+        promise.finally(() => {
+          active.delete(promise);
+          setFetchingWallets(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(wallet.toLowerCase());
+            return newSet;
+          });
+        });
+
+        active.add(promise);
+        setFetchingWallets(prev => new Set(prev).add(wallet.toLowerCase()));
+      }
+
+      // Wait for remaining requests
+      await Promise.all(active);
+    };
+
+    await processNext();
+    return results;
+  };
 
   // Fetch top holders from Polymarket API
   const fetchTopHolders = async () => {
@@ -429,14 +669,14 @@ export function TopHolders({
                     {/* Event Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-medium text-cyan-400 truncate">
+                        <span className="text-sm font-semibold text-white truncate">
                           {event.eventSlug}
                         </span>
-                        <span className="text-[10px] text-white/40 font-mono shrink-0">
+                        <span className="text-xs text-white/50 font-mono shrink-0">
                           ID: {event.eventId}
                         </span>
                       </div>
-                      <span className="text-[10px] text-white/50">
+                      <span className="text-xs text-white/60 font-medium">
                         {event.markets.filter(m => selectedMarketIds.has(`${event.eventId}-${m.marketId}`)).length}/{event.markets.length} market{event.markets.length !== 1 ? 's' : ''} selected
                       </span>
                     </div>
@@ -463,18 +703,12 @@ export function TopHolders({
                               className="h-3 w-3 border-white/20 data-[state=checked]:bg-purple-500 data-[state=checked]:border-purple-500"
                             />
                             
-                            <div className="h-1 w-1 rounded-full bg-yellow-400/60 shrink-0" />
+                            <div className="h-1.5 w-1.5 rounded-full bg-cyan-400 shrink-0" />
                             <div className="flex-1 min-w-0">
-                              <span className="text-yellow-400/80 truncate block">
+                              <span className="text-sm text-white/90 font-medium truncate block">
                                 {market.marketSlug}
                               </span>
-                              <span className="text-white/20 text-[9px] font-mono block">
-                                Condition: {market.conditionId}
-                              </span>
                             </div>
-                            <span className="text-white/30 text-[10px] font-mono shrink-0">
-                              {market.marketId}
-                            </span>
                           </div>
                         );
                       })}
@@ -515,107 +749,297 @@ export function TopHolders({
               <Loader2 className="h-8 w-8 text-purple-400 animate-spin" />
             </div>
           ) : holdersData.length > 0 ? (
-            <div className="h-full flex flex-col">
-              {/* Header - No Pagination Needed, Show All Tokens */}
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-white/60">
-                  Found {totalHolders} holders across {holdersData.length} outcome{holdersData.length !== 1 ? 's' : ''}
-                </p>
+            <div className="h-full flex flex-col gap-4">
+              {/* Market Dropdown Selector */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-white">Select Market</label>
+                <select
+                  value={selectedMarketForView || ''}
+                  onChange={(e) => {
+                    setSelectedMarketForView(e.target.value);
+                    setSelectedOutcomeTab(0); // Reset to first outcome when market changes
+                  }}
+                  className="w-full px-3 py-2 text-sm bg-black/40 border border-white/10 rounded-lg text-white focus:border-purple-500/40 focus:outline-none"
+                >
+                  <option value="">-- Choose a market --</option>
+                  {/* Group tokens by market slug */}
+                  {Array.from(new Set(holdersData.map(t => t.outcomeInfo?.marketSlug).filter(Boolean))).map((marketSlug) => {
+                    // Find the market with this slug to get its question
+                    const market = selectedEvents.flatMap(e => e.markets).find(m => m.marketSlug === marketSlug);
+                    const displayText = market?.question || marketSlug;
+                    return (
+                      <option key={marketSlug} value={marketSlug}>
+                        {displayText}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
-              <ScrollArea className="flex-1">
-                <div className="space-y-3 pr-4">
-                  {/* Show ALL token groups (No pagination at this level) */}
-                  {holdersData.map((tokenGroup, groupIndex) => (
-                      <div key={`${tokenGroup.token}-${groupIndex}`} className="space-y-2">
-                        {/* Outcome Header */}
-                        {tokenGroup.outcomeInfo && (
-                          <div className="flex items-center gap-2 px-3 py-1.5 bg-black/40 rounded-lg border border-white/10">
-                            <div className={`text-xs font-bold px-2 py-0.5 rounded ${
-                              tokenGroup.outcomeInfo.outcome.toLowerCase() === 'yes' 
-                                ? 'bg-green-500/20 text-green-400' 
-                                : tokenGroup.outcomeInfo.outcome.toLowerCase() === 'no'
-                                ? 'bg-red-500/20 text-red-400'
-                                : 'bg-purple-500/20 text-purple-400'
-                            }`}>
-                              {tokenGroup.outcomeInfo.outcome}
-                            </div>
-                            <span className="text-xs text-white/50">•</span>
-                            <span className="text-xs text-white/60 truncate">{tokenGroup.outcomeInfo.marketSlug}</span>
-                          </div>
-                        )}
+
+              {/* Show outcomes as tabs when market is selected */}
+              {selectedMarketForView && (() => {
+                const marketTokens = holdersData.filter(t => t.outcomeInfo?.marketSlug === selectedMarketForView);
+                const totalHolders = marketTokens.reduce((sum, t) => sum + t.holders.length, 0);
+                
+                return (
+                  <>
+                    {/* Header with total holders count */}
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-base font-semibold text-white">
+                        {totalHolders} Holder{totalHolders !== 1 ? 's' : ''} • {marketTokens.length} Outcome{marketTokens.length !== 1 ? 's' : ''}
+                      </h3>
+                    </div>
+
+                    {/* Outcome Tabs */}
+                    <div className="flex gap-2 border-b border-white/10 pb-2">
+                      {marketTokens.map((tokenGroup, index) => (
+                        <button
+                          key={tokenGroup.token}
+                          onClick={() => setSelectedOutcomeTab(index)}
+                          className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-all ${
+                            selectedOutcomeTab === index
+                              ? tokenGroup.outcomeInfo?.outcome.toLowerCase() === 'yes'
+                                ? 'bg-green-500/30 text-green-300 border-b-2 border-green-500'
+                                : tokenGroup.outcomeInfo?.outcome.toLowerCase() === 'no'
+                                ? 'bg-red-500/30 text-red-300 border-b-2 border-red-500'
+                                : 'bg-purple-500/30 text-purple-300 border-b-2 border-purple-500'
+                              : 'text-white/50 hover:text-white/80 hover:bg-white/5'
+                          }`}
+                        >
+                          {tokenGroup.outcomeInfo?.outcome || `Outcome ${index + 1}`}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Cumulative PnL Summary for selected outcome */}
+                    {(() => {
+                      const outcomeHolders = marketTokens[selectedOutcomeTab]?.holders || [];
+                      const holdersWithPnL = outcomeHolders.filter(h => {
+                        const pnl = holderPnLData.get(h.proxyWallet.toLowerCase());
+                        return pnl && !pnl.isLoading;
+                      });
+                      
+                      if (holdersWithPnL.length > 0) {
+                        const cumulative = {
+                          allTime: 0,
+                          monthly: 0,
+                          weekly: 0,
+                          daily: 0,
+                          count: 0
+                        };
                         
-                        {/* Holders for this token */}
-                        {tokenGroup.holders.map((holder: any, holderIndex: number) => (
-                      <Card 
-                        key={`${holder.proxyWallet}-${tokenGroup.token}-${holderIndex}`}
-                        className="bg-gradient-to-r from-purple-500/10 to-transparent border-purple-500/20 border transition-all hover:scale-[1.01]"
-                      >
-                        <CardContent className="p-3">
-                          {/* Header: User Info */}
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              {holder.profileImageOptimized || holder.profileImage ? (
-                                <img 
-                                  src={holder.profileImageOptimized || holder.profileImage} 
-                                  alt={holder.name}
-                                  className="h-8 w-8 rounded-full border border-white/10"
-                                />
-                              ) : (
-                                <div className="h-8 w-8 rounded-full bg-purple-500/20 border border-purple-500/20 flex items-center justify-center">
-                                  <Users className="h-4 w-4 text-purple-400" />
+                        holdersWithPnL.forEach(h => {
+                          const pnl = holderPnLData.get(h.proxyWallet.toLowerCase());
+                          if (pnl) {
+                            if (pnl.allTimePnl !== null) cumulative.allTime += pnl.allTimePnl;
+                            if (pnl.monthlyPnl !== null) cumulative.monthly += pnl.monthlyPnl;
+                            if (pnl.weeklyPnl !== null) cumulative.weekly += pnl.weeklyPnl;
+                            if (pnl.dailyPnl !== null) cumulative.daily += pnl.dailyPnl;
+                            cumulative.count++;
+                          }
+                        });
+                        
+                        return (
+                          <div className="p-3 rounded-lg bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-sm font-semibold text-white">
+                                📊 Cumulative PnL ({cumulative.count}/{outcomeHolders.length} holders)
+                              </h4>
+                              {holdersWithPnL.length < outcomeHolders.length && (
+                                <div className="flex items-center gap-1">
+                                  <Loader2 className="h-3 w-3 text-purple-400 animate-spin" />
+                                  <span className="text-xs text-white/40">Loading...</span>
                                 </div>
                               )}
-                              <div className="flex flex-col">
-                                <a 
-                                  href={`/address/${holder.proxyWallet}`}
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              <div className="bg-black/20 p-2 rounded">
+                                <div className="text-xs text-white/50 mb-1">All-Time</div>
+                                <div className={`text-base font-bold font-mono ${
+                                  cumulative.allTime >= 0 ? 'text-green-400' : 'text-red-400'
+                                }`}>
+                                  ${cumulative.allTime.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </div>
+                              </div>
+                              <div className="bg-black/20 p-2 rounded">
+                                <div className="text-xs text-white/50 mb-1">Monthly</div>
+                                <div className={`text-base font-bold font-mono ${
+                                  cumulative.monthly >= 0 ? 'text-green-400' : 'text-red-400'
+                                }`}>
+                                  ${cumulative.monthly.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </div>
+                              </div>
+                              <div className="bg-black/20 p-2 rounded">
+                                <div className="text-xs text-white/50 mb-1">Weekly</div>
+                                <div className={`text-base font-bold font-mono ${
+                                  cumulative.weekly >= 0 ? 'text-green-400' : 'text-red-400'
+                                }`}>
+                                  ${cumulative.weekly.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </div>
+                              </div>
+                              <div className="bg-black/20 p-2 rounded">
+                                <div className="text-xs text-white/50 mb-1">Daily</div>
+                                <div className={`text-base font-bold font-mono ${
+                                  cumulative.daily >= 0 ? 'text-green-400' : 'text-red-400'
+                                }`}>
+                                  ${cumulative.daily.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    {/* Holders for selected outcome */}
+                    <ScrollArea className="flex-1">
+                      <div className="space-y-3 pr-4">
+                        {marketTokens[selectedOutcomeTab]?.holders.map((holder: any, holderIndex: number) => {
+                          const pnlData = holderPnLData.get(holder.proxyWallet.toLowerCase());
+                          const isLoadingPnL = fetchingWallets.has(holder.proxyWallet.toLowerCase()) || !pnlData;
+                          
+                          return (
+                          <Card 
+                            key={`${holder.proxyWallet}-${holderIndex}`}
+                            className="bg-gradient-to-r from-purple-500/10 to-transparent border-purple-500/20 border transition-all hover:scale-[1.01]"
+                          >
+                            <CardContent className="p-3">
+                              {/* Header: User Info */}
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  {holder.profileImageOptimized || holder.profileImage ? (
+                                    <img 
+                                      src={holder.profileImageOptimized || holder.profileImage} 
+                                      alt={holder.name}
+                                      className="h-8 w-8 rounded-full border border-white/10"
+                                    />
+                                  ) : (
+                                    <div className="h-8 w-8 rounded-full bg-purple-500/20 border border-purple-500/20 flex items-center justify-center">
+                                      <Users className="h-4 w-4 text-purple-400" />
+                                    </div>
+                                  )}
+                                  <div className="flex flex-col">
+                                    <a 
+                                      href={`/address/${holder.proxyWallet}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-sm text-white font-semibold hover:text-purple-300 transition-colors"
+                                    >
+                                      {holder.name || holder.pseudonym || 'Anonymous'}
+                                    </a>
+                                    {holder.verified && (
+                                      <span className="text-xs text-cyan-400 font-medium">✓ Verified</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-base font-bold text-white font-mono">
+                                    {holder.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </div>
+                                  <div className="text-xs text-white/50 font-medium">shares</div>
+                                </div>
+                              </div>
+
+                              {/* PnL Stats */}
+                              {isLoadingPnL ? (
+                                <div className="flex items-center gap-2 mb-2 p-2 rounded bg-black/20">
+                                  <Loader2 className="h-3 w-3 text-purple-400 animate-spin" />
+                                  <span className="text-xs text-white/40">Loading PnL...</span>
+                                </div>
+                              ) : pnlData && (
+                                <div className="mb-2 p-2 rounded bg-black/20 space-y-1">
+                                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                    {/* All-Time PnL */}
+                                    <div>
+                                      <span className="text-white/40">All-Time: </span>
+                                      <span className={`font-mono font-bold ${
+                                        pnlData.allTimePnl === null ? 'text-white/30' :
+                                        pnlData.allTimePnl >= 0 ? 'text-green-400' : 'text-red-400'
+                                      }`}>
+                                        {pnlData.allTimePnl === null ? 'N/A' : 
+                                          `$${pnlData.allTimePnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                                      </span>
+                                    </div>
+                                    {/* Monthly PnL */}
+                                    <div>
+                                      <span className="text-white/40">Monthly: </span>
+                                      <span className={`font-mono font-bold ${
+                                        pnlData.monthlyPnl === null ? 'text-white/30' :
+                                        pnlData.monthlyPnl >= 0 ? 'text-green-400' : 'text-red-400'
+                                      }`}>
+                                        {pnlData.monthlyPnl === null ? 'N/A' : 
+                                          `$${pnlData.monthlyPnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                                      </span>
+                                    </div>
+                                    {/* Weekly PnL */}
+                                    <div>
+                                      <span className="text-white/40">Weekly: </span>
+                                      <span className={`font-mono font-bold ${
+                                        pnlData.weeklyPnl === null ? 'text-white/30' :
+                                        pnlData.weeklyPnl >= 0 ? 'text-green-400' : 'text-red-400'
+                                      }`}>
+                                        {pnlData.weeklyPnl === null ? 'N/A' : 
+                                          `$${pnlData.weeklyPnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                                      </span>
+                                    </div>
+                                    {/* Daily PnL */}
+                                    <div>
+                                      <span className="text-white/40">Daily: </span>
+                                      <span className={`font-mono font-bold ${
+                                        pnlData.dailyPnl === null ? 'text-white/30' :
+                                        pnlData.dailyPnl >= 0 ? 'text-green-400' : 'text-red-400'
+                                      }`}>
+                                        {pnlData.dailyPnl === null ? 'N/A' : 
+                                          `$${pnlData.dailyPnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {/* Markets Traded */}
+                                  {pnlData.marketsTraded !== null && (
+                                    <div className="text-[10px] pt-1 border-t border-white/5">
+                                      <span className="text-white/40">Markets Traded: </span>
+                                      <span className="text-purple-400 font-mono font-bold">{pnlData.marketsTraded}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Bio if available */}
+                              {holder.bio && (
+                                <p className="text-xs text-white/60 mb-2 line-clamp-2">
+                                  {holder.bio}
+                                </p>
+                              )}
+
+                              {/* Footer: Wallet */}
+                              <div className="flex items-center justify-end pt-2 border-t border-white/5">
+                                <a
+                                  href={`https://polygonscan.com/address/${holder.proxyWallet}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-xs text-white/90 font-medium hover:text-purple-400 transition-colors"
+                                  className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors font-medium"
                                 >
-                                  {holder.name || holder.pseudonym || 'Anonymous'}
+                                  <span className="font-mono">{holder.proxyWallet.slice(0, 8)}...{holder.proxyWallet.slice(-6)}</span>
+                                  <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                                 </a>
-                                {holder.verified && (
-                                  <span className="text-[9px] text-cyan-400">✓ Verified</span>
-                                )}
                               </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-bold text-white font-mono">
-                                {holder.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </div>
-                              <div className="text-[9px] text-white/40">shares</div>
-                            </div>
-                          </div>
-
-                          {/* Bio if available */}
-                          {holder.bio && (
-                            <p className="text-xs text-white/60 mb-2 line-clamp-2">
-                              {holder.bio}
-                            </p>
-                          )}
-
-                          {/* Footer: Token & Wallet */}
-                          <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                            <span className="text-[9px] text-white/30 font-mono">
-                              Outcome: {holder.outcomeIndex}
-                            </span>
-                            <a
-                              href={`https://polygonscan.com/address/${holder.proxyWallet}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-[9px] text-purple-400 hover:text-purple-300 transition-colors"
-                            >
-                              <span className="font-mono">{holder.proxyWallet.slice(0, 6)}...{holder.proxyWallet.slice(-4)}</span>
-                              <ExternalLink className="h-3 w-3 shrink-0" />
-                            </a>
-                          </div>
-                        </CardContent>
-                      </Card>
-                        ))}
+                            </CardContent>
+                          </Card>
+                          );
+                        })}
                       </div>
-                    ))}
+                    </ScrollArea>
+                  </>
+                );
+              })()}
+
+              {/* Prompt to select a market */}
+              {!selectedMarketForView && (
+                <div className="flex items-center justify-center flex-1">
+                  <p className="text-white/50 text-sm">Select a market from the dropdown above</p>
                 </div>
-              </ScrollArea>
+              )}
             </div>
           ) : selectedMarketIds.size > 0 && !isLoadingHolders ? (
             <div className="flex items-center justify-center h-full text-center">
