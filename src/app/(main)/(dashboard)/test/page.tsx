@@ -238,16 +238,112 @@ export default function FeedPage() {
 
   return (
     <main className="container max-w-[1800px] mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:h-screen lg:flex lg:flex-col">
-      {/* === SPLIT LAYOUT: Feed on Left, Whale Watching on Right === */}
-      {/* On mobile: Stack vertically with normal scroll, On desktop: Side by side with independent scrolling */}
-      {/* Mobile: flex-col with auto height, Desktop: flex-row with fixed height and overflow */}
-      <div className="flex flex-col lg:flex-row gap-6 lg:flex-1 lg:overflow-hidden">
+      
+      {/* === MOBILE LAYOUT: Tabs for Feed / Whale Watching === */}
+      <div className="lg:hidden">
+        <Tabs defaultValue="feed" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 bg-black/40 border border-white/10 p-1 mb-6">
+            <TabsTrigger value="feed" className="data-[state=active]:bg-white/10">
+              <TrendingUp className="mr-2 h-4 w-4" />
+              Alpha Feed
+            </TabsTrigger>
+            <TabsTrigger value="whales" className="data-[state=active]:bg-white/10">
+              <Eye className="mr-2 h-4 w-4" />
+              Whale Watching
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Feed Tab */}
+          <TabsContent value="feed" className="mt-0 space-y-6">
+            {/* Header */}
+            <div className="flex flex-col items-start gap-4">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-3">
+                  Alpha Feed <span className="text-xs font-mono font-normal text-green-400 bg-green-400/10 px-2 py-0.5 rounded border border-green-400/20">LIVE</span>
+                </h1>
+                <p className="text-muted-foreground text-sm mt-1">
+                  Real-time semantic correlations between X and Polymarket.
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-2 w-full">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => loadFeed(true)} 
+                  disabled={loading}
+                  className="flex-1 border-white/10 hover:bg-white/5"
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                  Refresh
+                </Button>
+                
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => setManageOpen(true)}
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white border-none"
+                >
+                  <Settings2 className="mr-2 h-4 w-4"/>
+                  Sources
+                </Button>
+              </div>
+            </div>
+
+            {/* Feed Type Tabs */}
+            <Tabs defaultValue="global" onValueChange={(v: string) => setActiveTab(v as FeedFilter)} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 bg-black/40 border border-white/10 p-1">
+                <TabsTrigger value="global" className="data-[state=active]:bg-white/10">Global</TabsTrigger>
+                <TabsTrigger value="following" className="data-[state=active]:bg-white/10">Following</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="global" className="mt-6 space-y-4">
+                <FeedList items={items} loading={loading} onWatchWhales={watchWhalesForTweet} isBeingWatched={isBeingWatched} />
+              </TabsContent>
+              
+              <TabsContent value="following" className="mt-6 space-y-4">
+                {items.length === 0 && !loading ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-muted-foreground border border-dashed border-white/10 rounded-xl bg-white/5 gap-4">
+                    <p className="text-center">You are not following any accounts yet.</p>
+                    <Button onClick={() => setManageOpen(true)} variant="default">
+                      <TrendingUp className="mr-2 h-4 w-4" /> Add Accounts
+                    </Button>
+                  </div>
+                ) : (
+                  <FeedList items={items} loading={loading} onWatchWhales={watchWhalesForTweet} isBeingWatched={isBeingWatched} />
+                )}
+              </TabsContent>
+            </Tabs>
+
+            {/* Load More */}
+            {hasMore && items.length > 0 && (
+              <Button 
+                variant="ghost" 
+                className="w-full text-white/50 hover:text-white" 
+                onClick={() => loadFeed(false)} 
+                disabled={loading}
+              >
+                {loading ? "Loading..." : "Load More Activity"}
+              </Button>
+            )}
+          </TabsContent>
+
+          {/* Whale Watching Tab */}
+          <TabsContent value="whales" className="mt-0">
+            <div className="h-[calc(100vh-200px)] min-h-[600px]">
+              <WhaleWatching selectedEvents={whaleFilters.events} />
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* === DESKTOP LAYOUT: Side by Side === */}
+      <div className="hidden lg:flex lg:flex-row gap-6 lg:flex-1 lg:overflow-hidden">
         
-        {/* === LEFT COLUMN: Alpha Feed === */}
-        {/* Mobile: Normal flow, Desktop: Independent scroll in 60% column */}
+        {/* LEFT COLUMN: Alpha Feed */}
         <div className="w-full lg:w-[60%] flex flex-col gap-6 lg:overflow-y-auto">
           
-          {/* --- Header Area --- */}
+          {/* Header Area */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
@@ -259,31 +355,30 @@ export default function FeedPage() {
             </div>
             
             <div className="flex items-center gap-2 w-full sm:w-auto">
-               <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => loadFeed(true)} 
-                  disabled={loading}
-                  className="flex-1 sm:flex-none border-white/10 hover:bg-white/5"
-               >
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => loadFeed(true)} 
+                disabled={loading}
+                className="flex-1 sm:flex-none border-white/10 hover:bg-white/5"
+              >
                 <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                 Refresh
               </Button>
               
-              {/* Manage Sources Button (visible on all tabs for easy access) */}
               <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  onClick={() => setManageOpen(true)}
-                  className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-500 text-white border-none"
-               >
-                 <Settings2 className="mr-2 h-4 w-4"/>
-                 Sources
+                variant="secondary" 
+                size="sm" 
+                onClick={() => setManageOpen(true)}
+                className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-500 text-white border-none"
+              >
+                <Settings2 className="mr-2 h-4 w-4"/>
+                Sources
               </Button>
             </div>
           </div>
 
-          {/* --- Tabs & Content --- */}
+          {/* Tabs & Content */}
           <Tabs defaultValue="global" onValueChange={(v: string) => setActiveTab(v as FeedFilter)} className="w-full">
             <TabsList className="grid w-full sm:w-[400px] grid-cols-2 bg-black/40 border border-white/10 p-1">
               <TabsTrigger value="global" className="data-[state=active]:bg-white/10">Global Feed</TabsTrigger>
@@ -295,16 +390,16 @@ export default function FeedPage() {
             </TabsContent>
             
             <TabsContent value="following" className="mt-6 space-y-4 min-h-[50vh]">
-               {items.length === 0 && !loading ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-muted-foreground border border-dashed border-white/10 rounded-xl bg-white/5 gap-4">
-                     <p className="text-center">You are not following any accounts yet.</p>
-                     <Button onClick={() => setManageOpen(true)} variant="default">
-                       <TrendingUp className="mr-2 h-4 w-4" /> Add Accounts
-                     </Button>
-                  </div>
-               ) : (
-                 <FeedList items={items} loading={loading} onWatchWhales={watchWhalesForTweet} isBeingWatched={isBeingWatched} />
-               )}
+              {items.length === 0 && !loading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-muted-foreground border border-dashed border-white/10 rounded-xl bg-white/5 gap-4">
+                  <p className="text-center">You are not following any accounts yet.</p>
+                  <Button onClick={() => setManageOpen(true)} variant="default">
+                    <TrendingUp className="mr-2 h-4 w-4" /> Add Accounts
+                  </Button>
+                </div>
+              ) : (
+                <FeedList items={items} loading={loading} onWatchWhales={watchWhalesForTweet} isBeingWatched={isBeingWatched} />
+              )}
             </TabsContent>
           </Tabs>
 
@@ -321,13 +416,9 @@ export default function FeedPage() {
           )}
         </div>
 
-        {/* === RIGHT COLUMN: Whale Watching === */}
-        {/* Mobile: Normal flow with fixed height, Desktop: Independent scroll in 40% column */}
-        <div className="w-full lg:w-[40%] h-[600px] lg:h-full">
-          {/* Mobile: 600px fixed height, Desktop: Full height with independent scroll */}
-          <WhaleWatching 
-            selectedEvents={whaleFilters.events}
-          />
+        {/* RIGHT COLUMN: Whale Watching */}
+        <div className="w-full lg:w-[40%] lg:h-full">
+          <WhaleWatching selectedEvents={whaleFilters.events} />
         </div>
         
       </div>

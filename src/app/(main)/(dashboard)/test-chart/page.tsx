@@ -283,12 +283,6 @@ export default function TestPage() {
   // hovering a tweet highlights time on expanded chart
   const [hoveredNewsTimeSec, setHoveredNewsTimeSec] = useState<number | null>(null);
 
-  // Keep chart mounted briefly after closing to avoid "disposed" resize/draw races
-  const [expandedMountedId, setExpandedMountedId] = useState<string | null>(null);
-  useEffect(() => {
-    if (expandedMarketId) setExpandedMountedId(expandedMarketId);
-  }, [expandedMarketId]);
-
   // Main chart (URL-driven)
   const [mainChartMode, setMainChartMode] = useState<MainChartMode>("TOP5");
   const [mainChartMarketIds, setMainChartMarketIds] = useState<string[]>([]);
@@ -329,6 +323,14 @@ export default function TestPage() {
 
   useEffect(() => {
     expandedAliveRef.current = Boolean(expandedMarketId && activeTab === "CHART");
+    
+    // When switching away from CHART tab, immediately clean up refs and state
+    if (activeTab !== "CHART") {
+      expandedLineSeriesRef.current = null;
+      setExpandedSignalTooltip((t) => (t.show ? { ...t, show: false } : t));
+      setExpandedHoverLineX(null);
+    }
+    
     return () => {
       expandedAliveRef.current = false;
       if (expandedRafRef.current != null) {
@@ -480,7 +482,8 @@ export default function TestPage() {
     async function init() {
       // const raw = await fetchEventData("who-will-trump-nominate-as-fed-chair");
       // const raw = await fetchEventData("who-will-be-the-first-to-leave-the-trump-cabinet");
-      const raw = await fetchEventData("maduro-out-in-2025");
+      // const raw = await fetchEventData("maduro-out-in-2025");
+      const raw = await fetchEventData("khamenei-out-as-supreme-leader-of-iran-by-january-31");
       if (!raw || cancelled) return;
 
       const clean = normalizeEvent([raw]);
@@ -683,13 +686,8 @@ export default function TestPage() {
     killExpandedChartNow();
     setExpandedSignalTooltip((t) => (t.show ? { ...t, show: false } : t));
     setHoveredNewsTimeSec(null);
-
     setExpandedMarketId(null);
-
-    requestAnimationFrame(() => {
-      setExpandedMountedId(null);
-      setExpandedHistory([]);
-    });
+    setExpandedHistory([]);
   };
 
   const toggleExpand = (id: string) => {
@@ -1029,6 +1027,12 @@ export default function TestPage() {
   const [expandedHoverLineX, setExpandedHoverLineX] = useState<number | null>(null);
   const expandedTimeScaleRef = useRef<any>(null);
   useEffect(() => {
+    // Guard: only run when CHART tab is active
+    if (activeTab !== "CHART" || !expandedMarketId) {
+      setExpandedHoverLineX(null);
+      return;
+    }
+
     if (!expandedTimeScaleRef.current || hoveredNewsTimeSec === null) {
       setExpandedHoverLineX(null);
       return;
@@ -1052,7 +1056,7 @@ export default function TestPage() {
     return () => {
       timeScaleApi.unsubscribeVisibleTimeRangeChange(updatePosition);
     };
-  }, [hoveredNewsTimeSec, expandedHistory]);
+  }, [hoveredNewsTimeSec, expandedHistory, activeTab, expandedMarketId]);
   const compareFitDep = useMemo(() => {
     return mainChartMarketIds.reduce((sum, id) => sum + (mainChartHistoryMap[id]?.length || 0), 0);
   }, [mainChartMarketIds, mainChartHistoryMap]);
@@ -1201,7 +1205,6 @@ export default function TestPage() {
           <div className="overflow-y-auto flex-1 divide-y divide-gray-800 scrollbar-thin scrollbar-thumb-gray-800">
             {eventData.markets.map((market) => {
               const isExpanded = expandedMarketId === market.id;
-              const keepMounted = expandedMountedId === market.id;
               const yesPrice = market.mainOutcome.price;
               const noPrice = 1 - yesPrice;
 
@@ -1251,8 +1254,8 @@ export default function TestPage() {
                     </div>
                   </div>
 
-                  {(isExpanded || keepMounted) && (
-                    <div className={`bg-gray-950 border-y border-gray-800 p-4 ${isExpanded ? "block" : "hidden"}`}>
+                  {isExpanded && (
+                    <div className="bg-gray-950 border-y border-gray-800 p-4">
                       {/* === TABS + SIGNAL TOGGLE === */}
                       <div className="flex items-center justify-between gap-4 border-b border-gray-800 mb-4 pb-2">
                         <div className="flex gap-4">

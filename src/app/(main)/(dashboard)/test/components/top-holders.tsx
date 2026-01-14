@@ -893,7 +893,7 @@ export function TopHolders({
                     })()}
 
                     {/* Holders for selected outcome */}
-                    <ScrollArea className="flex-1">
+                    <ScrollArea className="flex-1 min-h-0">
                       <div className="space-y-3 pr-4">
                         {marketTokens[selectedOutcomeTab]?.holders.map((holder: any, holderIndex: number) => {
                           const pnlData = holderPnLData.get(holder.proxyWallet.toLowerCase());
