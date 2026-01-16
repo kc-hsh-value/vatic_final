@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ExternalLink, RefreshCw, Zap, Settings2, TrendingUp, AlertTriangle, Eye } from "lucide-react";
+import { ExternalLink, RefreshCw, Zap, Settings2, TrendingUp, AlertTriangle, Eye, GripVertical } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -18,6 +18,23 @@ import { usePolymarketPrices } from "@/app/(main)/hooks/use-prices";
 import { ManageSourcesDialog } from "./components/manage-sources-dialog";
 import { MediaEntity, TweetMedia } from "./components/tweet_media";
 import { WhaleWatching } from "./components/whale-watching";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 // ... Types remain the same ...
 type Market = {
@@ -468,7 +485,66 @@ function TweetCard({ data, onWatchWhales, isBeingWatched }: {
     return acc;
   }, {} as Record<string, typeof data.markets>);
 
-  // console.log("groupedMarkets: ", groupedMarkets);
+  // State for event order (slugs)
+  const [eventOrder, setEventOrder] = useState<string[]>(Object.keys(groupedMarkets));
+  
+  // State for market orders within each event
+  const [marketOrders, setMarketOrders] = useState<Record<string, string[]>>(() => {
+    const orders: Record<string, string[]> = {};
+    Object.entries(groupedMarkets).forEach(([slug, markets]) => {
+      orders[slug] = markets.map(m => m.market_id);
+    });
+    return orders;
+  });
+
+  // Update event order when markets change
+  useEffect(() => {
+    const newSlugs = Object.keys(groupedMarkets);
+    setEventOrder(prev => {
+      // Keep existing order for slugs that are still present, add new ones at the end
+      const existingSlugs = prev.filter(slug => newSlugs.includes(slug));
+      const addedSlugs = newSlugs.filter(slug => !prev.includes(slug));
+      return [...existingSlugs, ...addedSlugs];
+    });
+  }, [data.markets]);
+
+  // Sensors for drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle event reordering
+  const handleEventDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      setEventOrder((items) => {
+        const oldIndex = items.indexOf(active.id as string);
+        const newIndex = items.indexOf(over.id as string);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
+
+  // Handle market reordering within an event
+  const handleMarketDragEnd = (eventSlug: string) => (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      setMarketOrders((prev) => {
+        const items = prev[eventSlug] || [];
+        const oldIndex = items.indexOf(active.id as string);
+        const newIndex = items.indexOf(over.id as string);
+        return {
+          ...prev,
+          [eventSlug]: arrayMove(items, oldIndex, newIndex),
+        };
+      });
+    }
+  };
 
   // 2. Extract Token IDs for Prices
   const allTokenIds = data.markets.flatMap((m) => m.clobTokenIds || []);
@@ -537,155 +613,275 @@ function TweetCard({ data, onWatchWhales, isBeingWatched }: {
       {/* --- Markets Section (Accordion) --- */}
       <div className="border-t border-white/5 bg-black/20">
         <Accordion type="single" collapsible className="w-full">
-          {Object.entries(groupedMarkets).map(([slug, markets]) => {
-             const eventMeta = markets[0];
-             
-             return (
-              <AccordionItem value={slug} key={slug} className="border-b-0 border-white/5 last:border-0">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleEventDragEnd}
+          >
+            <SortableContext items={eventOrder} strategy={verticalListSortingStrategy}>
+              {eventOrder.map((slug) => {
+                const markets = groupedMarkets[slug];
+                if (!markets) return null;
                 
-                {/* Accordion Trigger */}
-                <AccordionTrigger className="hover:no-underline px-4 py-3 group hover:bg-white/5 transition-colors">
-                  <div className="flex items-center gap-3 text-left w-full overflow-hidden">
-                     {/* Event Image */}
-                     <div className="shrink-0">
-                        {eventMeta.event_image ? (
-                            <img 
-                            src={eventMeta.event_image} 
-                            alt="Event" 
-                            className="w-10 h-10 rounded-md object-cover bg-white/5 border border-white/10"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} 
-                            />
-                        ) : (
-                            <div className="w-10 h-10 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/20">
-                                <Zap className="w-5 h-5"/>
-                            </div>
-                        )}
-                     </div>
-
-                     <div className="flex flex-col flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-blue-400 leading-tight group-hover:text-blue-300 transition-colors truncate">
-                                {formatSlugToTitle(slug)} 
-                            </span>
-                        </div>
-                        <span className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2">
-                          <span>{markets.length} market{markets.length > 1 ? 's' : ''} correlated</span>
-                          <span className="hidden sm:inline-flex items-center gap-1 text-white/30">• <Zap className="w-3 h-3"/> AI Reason Inside</span>
-                        </span>
-                     </div>
-                  </div>
-                </AccordionTrigger>
-
-                {/* Accordion Content */}
-                <AccordionContent className="px-4 pb-4 pt-0">
-                  
-                  {/* Reasoning Box */}
-                  <div className="mb-4 mt-1 p-3 bg-blue-500/5 border border-blue-500/10 rounded-md text-xs text-blue-100/80 leading-relaxed flex gap-3">
-                    <Zap className="w-4 h-4 mt-0.5 shrink-0 text-blue-400" />
-                    <div>
-                        <span className="font-bold text-blue-400 uppercase text-[10px] tracking-wider block mb-1">Correlation Analysis</span>
-                        {eventMeta.reason}
-                    </div>
-                  </div>
-
-                  {/* Market List */}
-                  <div className="space-y-2">
-                    {markets.map((m) => (
-                      <div key={m.market_id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/5 p-3 rounded-md border border-white/5 hover:border-white/10 transition-colors">
-                         
-                         {/* Question Title with Price Changes */}
-                         <div className="flex-1 space-y-2">
-                            <Link 
-                                href={`https://polymarket.com/event/${slug}/${m.market_slug}`}
-                                target="_blank"
-                                className="text-sm text-white/90 font-medium leading-snug hover:text-blue-400 transition-colors block"
-                            >
-                                {m.question}
-                            </Link>
-                            
-                            {/* Price Change Indicators */}
-                            {(m.price_change_1h != null || m.price_change_12h != null || m.price_change_24h != null) && (
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {m.price_change_1h != null && (
-                                  <div className={`flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
-                                    m.price_change_1h > 0 
-                                      ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
-                                      : m.price_change_1h < 0 
-                                      ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
-                                      : 'bg-white/5 text-white/40 border border-white/10'
-                                  }`}>
-                                    <span className="text-white/50 font-normal">1h:</span>
-                                    {m.price_change_1h > 0 ? '+' : ''}{m.price_change_1h.toFixed(1)}%
-                                  </div>
-                                )}
-                                {m.price_change_12h != null && (
-                                  <div className={`flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
-                                    m.price_change_12h > 0 
-                                      ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
-                                      : m.price_change_12h < 0 
-                                      ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
-                                      : 'bg-white/5 text-white/40 border border-white/10'
-                                  }`}>
-                                    <span className="text-white/50 font-normal">12h:</span>
-                                    {m.price_change_12h > 0 ? '+' : ''}{m.price_change_12h.toFixed(1)}%
-                                  </div>
-                                )}
-                                {m.price_change_24h != null && (
-                                  <div className={`flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
-                                    m.price_change_24h > 0 
-                                      ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
-                                      : m.price_change_24h < 0 
-                                      ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
-                                      : 'bg-white/5 text-white/40 border border-white/10'
-                                  }`}>
-                                    <span className="text-white/50 font-normal">24h:</span>
-                                    {m.price_change_24h > 0 ? '+' : ''}{m.price_change_24h.toFixed(1)}%
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                         </div>
-                         
-                         {/* Outcome Buttons with PRICES */}
-                         <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-                            {m.outcomes && m.outcomes.length > 0 ? (
-                                m.outcomes.map((outcome, idx) => {
-                                    const tokenId = m.clobTokenIds ? m.clobTokenIds[idx] : null;
-                                    const price = tokenId && prices ? prices[tokenId] : null;
-                                    
-                                    const priceLabel = price 
-                                        ? `${(price * 100).toFixed(0)}¢` 
-                                        : <span className="animate-pulse">--</span>;
-
-                                    return (
-                                        <Button 
-                                            key={idx} 
-                                            size="sm" 
-                                            variant="secondary" 
-                                            className="h-8 text-xs px-3 bg-black/40 hover:bg-white/10 border border-white/10 flex-1 sm:flex-none justify-between gap-3 min-w-[80px]"
-                                        >
-                                            <span className="text-white/70 truncate max-w-[80px]">{outcome}</span>
-                                            <span className={`font-mono font-bold ${price ? (price > 0.5 ? 'text-green-400' : 'text-red-400') : 'text-white/30'}`}>
-                                                {priceLabel}
-                                            </span>
-                                        </Button>
-                                    );
-                                })
-                            ) : (
-                                <Button size="sm" variant="outline" className="h-7 text-xs w-full">Trade</Button>
-                            )}
-                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </AccordionContent>
-
-              </AccordionItem>
-            )
-          })}
+                const eventMeta = markets[0];
+                const orderedMarkets = (marketOrders[slug] || [])
+                  .map(id => markets.find(m => m.market_id === id))
+                  .filter(Boolean) as Market[];
+                
+                return (
+                  <SortableAccordionItem 
+                    key={slug} 
+                    slug={slug}
+                    eventMeta={eventMeta}
+                    markets={orderedMarkets}
+                    prices={prices}
+                    onMarketDragEnd={handleMarketDragEnd(slug)}
+                    sensors={sensors}
+                  />
+                );
+              })}
+            </SortableContext>
+          </DndContext>
         </Accordion>
       </div>
     </Card>
+  );
+}
+
+// Sortable Accordion Item Component
+function SortableAccordionItem({ 
+  slug, 
+  eventMeta, 
+  markets, 
+  prices,
+  onMarketDragEnd,
+  sensors
+}: {
+  slug: string;
+  eventMeta: Market;
+  markets: Market[];
+  prices: Record<string, number> | undefined;
+  onMarketDragEnd: (event: DragEndEvent) => void;
+  sensors: any;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: slug });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <AccordionItem 
+      ref={setNodeRef}
+      style={style}
+      value={slug} 
+      className="border-b-0 border-white/5 last:border-0"
+    >
+      {/* Accordion Trigger */}
+      <AccordionTrigger className="hover:no-underline px-4 py-3 group hover:bg-white/5 transition-colors">
+        <div className="flex items-center gap-3 text-left w-full overflow-hidden">
+          {/* Drag Handle */}
+          <div 
+            {...attributes}
+            {...listeners}
+            className="shrink-0 cursor-grab active:cursor-grabbing text-white/30 hover:text-white/60 transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GripVertical className="w-5 h-5" />
+          </div>
+
+          {/* Event Image */}
+          <div className="shrink-0">
+            {eventMeta.event_image ? (
+              <img 
+                src={eventMeta.event_image} 
+                alt="Event" 
+                className="w-10 h-10 rounded-md object-cover bg-white/5 border border-white/10"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} 
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/20">
+                <Zap className="w-5 h-5"/>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-blue-400 leading-tight group-hover:text-blue-300 transition-colors truncate">
+                {formatSlugToTitle(slug)} 
+              </span>
+            </div>
+            <span className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2">
+              <span>{markets.length} market{markets.length > 1 ? 's' : ''} correlated</span>
+              <span className="hidden sm:inline-flex items-center gap-1 text-white/30">• <Zap className="w-3 h-3"/> AI Reason Inside</span>
+            </span>
+          </div>
+        </div>
+      </AccordionTrigger>
+
+      {/* Accordion Content */}
+      <AccordionContent className="px-4 pb-4 pt-0">
+        {/* Reasoning Box */}
+        <div className="mb-4 mt-1 p-3 bg-blue-500/5 border border-blue-500/10 rounded-md text-xs text-blue-100/80 leading-relaxed flex gap-3">
+          <Zap className="w-4 h-4 mt-0.5 shrink-0 text-blue-400" />
+          <div>
+            <span className="font-bold text-blue-400 uppercase text-[10px] tracking-wider block mb-1">Correlation Analysis</span>
+            {eventMeta.reason}
+          </div>
+        </div>
+
+        {/* Market List with Drag and Drop */}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={onMarketDragEnd}
+        >
+          <SortableContext items={markets.map(m => m.market_id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {markets.map((m) => (
+                <SortableMarketItem key={m.market_id} market={m} slug={slug} prices={prices} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      </AccordionContent>
+    </AccordionItem>
+  );
+}
+
+// Sortable Market Item Component
+function SortableMarketItem({ 
+  market, 
+  slug, 
+  prices 
+}: { 
+  market: Market; 
+  slug: string; 
+  prices: Record<string, number> | undefined;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: market.market_id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div 
+      ref={setNodeRef}
+      style={style}
+      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/5 p-3 rounded-md border border-white/5 hover:border-white/10 transition-colors"
+    >
+      {/* Drag Handle */}
+      <div 
+        {...attributes}
+        {...listeners}
+        className="shrink-0 cursor-grab active:cursor-grabbing text-white/30 hover:text-white/60 transition-colors sm:mr-2"
+      >
+        <GripVertical className="w-4 h-4" />
+      </div>
+
+      {/* Question Title with Price Changes */}
+      <div className="flex-1 space-y-2">
+        <Link 
+          href={`https://polymarket.com/event/${slug}/${market.market_slug}`}
+          target="_blank"
+          className="text-sm text-white/90 font-medium leading-snug hover:text-blue-400 transition-colors block"
+        >
+          {market.question}
+        </Link>
+        
+        {/* Price Change Indicators */}
+        {(market.price_change_1h != null || market.price_change_12h != null || market.price_change_24h != null) && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {market.price_change_1h != null && (
+              <div className={`flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                market.price_change_1h > 0 
+                  ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                  : market.price_change_1h < 0 
+                  ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
+                  : 'bg-white/5 text-white/40 border border-white/10'
+              }`}>
+                <span className="text-white/50 font-normal">1h:</span>
+                {market.price_change_1h > 0 ? '+' : ''}{market.price_change_1h.toFixed(1)}%
+              </div>
+            )}
+            {market.price_change_12h != null && (
+              <div className={`flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                market.price_change_12h > 0 
+                  ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                  : market.price_change_12h < 0 
+                  ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
+                  : 'bg-white/5 text-white/40 border border-white/10'
+              }`}>
+                <span className="text-white/50 font-normal">12h:</span>
+                {market.price_change_12h > 0 ? '+' : ''}{market.price_change_12h.toFixed(1)}%
+              </div>
+            )}
+            {market.price_change_24h != null && (
+              <div className={`flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                market.price_change_24h > 0 
+                  ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                  : market.price_change_24h < 0 
+                  ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
+                  : 'bg-white/5 text-white/40 border border-white/10'
+              }`}>
+                <span className="text-white/50 font-normal">24h:</span>
+                {market.price_change_24h > 0 ? '+' : ''}{market.price_change_24h.toFixed(1)}%
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      
+      {/* Outcome Buttons with PRICES */}
+      <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+        {market.outcomes && market.outcomes.length > 0 ? (
+          market.outcomes.map((outcome, idx) => {
+            const tokenId = market.clobTokenIds ? market.clobTokenIds[idx] : null;
+            const price = tokenId && prices ? prices[tokenId] : null;
+            
+            const priceLabel = price 
+              ? `${(price * 100).toFixed(0)}¢` 
+              : <span className="animate-pulse">--</span>;
+
+            return (
+              <Button 
+                key={idx} 
+                size="sm" 
+                variant="secondary" 
+                className="h-8 text-xs px-3 bg-black/40 hover:bg-white/10 border border-white/10 flex-1 sm:flex-none justify-between gap-3 min-w-[80px]"
+              >
+                <span className="text-white/70 truncate max-w-[80px]">{outcome}</span>
+                <span className={`font-mono font-bold ${price ? (price > 0.5 ? 'text-green-400' : 'text-red-400') : 'text-white/30'}`}>
+                  {priceLabel}
+                </span>
+              </Button>
+            );
+          })
+        ) : (
+          <Button size="sm" variant="outline" className="h-7 text-xs w-full">Trade</Button>
+        )}
+      </div>
+    </div>
   );
 }
 
