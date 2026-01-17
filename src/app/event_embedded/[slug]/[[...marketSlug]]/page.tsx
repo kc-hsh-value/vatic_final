@@ -62,64 +62,64 @@ export default async function Page({
   const outcomes = await getAllOutcomes(primaryMarket);
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      {/* Event Header */}
-      <div className="max-w-7xl mx-auto mb-8">
-        <div className="flex items-start gap-6 mb-6">
-          {/* Event Image */}
+    <div className="min-h-screen bg-black text-white p-3">
+      {/* Compact Event Header */}
+      <div className="max-w-7xl mx-auto mb-4">
+        <div className="flex items-start gap-3 mb-3">
+          {/* Event Image - Smaller */}
           <img
             src={event.image}
             alt={event.title}
-            className="w-24 h-24 rounded-xl object-cover border border-gray-800"
+            className="w-16 h-16 rounded-lg object-cover border border-gray-800 flex-shrink-0"
           />
 
           {/* Title & Description */}
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold mb-3">{event.title}</h1>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-bold mb-2 leading-tight">{event.title}</h1>
             
-            {/* Stats Row */}
-            <div className="flex flex-wrap gap-6 text-sm mb-4">
-              <div className="flex flex-col">
-                <span className="text-gray-400">Volume</span>
-                <span className="font-bold text-white">
+            {/* Stats Row - Compact */}
+            <div className="flex flex-wrap gap-3 text-xs mb-2">
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500">Vol:</span>
+                <span className="font-semibold text-white">
                   {formatNumber(event.volume)}
                 </span>
               </div>
-              <div className="flex flex-col">
-                <span className="text-gray-400">24h Volume</span>
-                <span className="font-bold text-white">
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500">24h:</span>
+                <span className="font-semibold text-white">
                   {formatNumber(event.volume24hr)}
                 </span>
               </div>
-              <div className="flex flex-col">
-                <span className="text-gray-400">Liquidity</span>
-                <span className="font-bold text-emerald-400">
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500">Liq:</span>
+                <span className="font-semibold text-emerald-400">
                   {formatNumber(event.liquidity)}
                 </span>
               </div>
-              <div className="flex flex-col">
-                <span className="text-gray-400">Ends</span>
-                <span className="font-bold text-white">
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500">Ends:</span>
+                <span className="font-semibold text-white">
                   {formatDate(event.endDate)}
                 </span>
               </div>
               {hasMultipleMarkets && (
-                <div className="flex flex-col">
-                  <span className="text-gray-400">Markets</span>
-                  <span className="font-bold text-blue-400">
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-500">Markets:</span>
+                  <span className="font-semibold text-blue-400">
                     {event.markets.length}
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Tags */}
+            {/* Tags - Compact */}
             {event.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1">
                 {event.tags.map((tag) => (
                   <span
                     key={tag.id}
-                    className="px-2.5 py-1 bg-gray-800/50 border border-gray-700 rounded-md text-xs text-gray-300"
+                    className="px-1.5 py-0.5 bg-gray-800/50 border border-gray-700 rounded text-[10px] text-gray-400"
                   >
                     {tag.label}
                   </span>
@@ -128,43 +128,37 @@ export default async function Page({
             )}
           </div>
 
-          {/* Status Badges */}
-          <div className="flex flex-col gap-2">
+          {/* Status Badges - Compact horizontal */}
+          <div className="flex flex-wrap gap-1">
             {/* Event Type Badge */}
-            <span className="px-3 py-1 bg-blue-900/30 border border-blue-700 rounded-md text-xs font-bold text-blue-400">
+            <span className="px-2 py-0.5 bg-blue-900/30 border border-blue-700 rounded text-[10px] font-bold text-blue-400">
               {eventType.replace(/_/g, " ")}
             </span>
             
             {event.featured && (
-              <span className="px-3 py-1 bg-yellow-900/30 border border-yellow-700 rounded-md text-xs font-bold text-yellow-400">
-                ⭐ Featured
+              <span className="px-2 py-0.5 bg-yellow-900/30 border border-yellow-700 rounded text-[10px] font-bold text-yellow-400">
+                ⭐
               </span>
             )}
             {event.closed && (
-              <span className="px-3 py-1 bg-red-900/30 border border-red-700 rounded-md text-xs font-bold text-red-400">
+              <span className="px-2 py-0.5 bg-red-900/30 border border-red-700 rounded text-[10px] font-bold text-red-400">
                 Closed
               </span>
             )}
             {isSeries && (
-              <span className="px-3 py-1 bg-purple-900/30 border border-purple-700 rounded-md text-xs font-bold text-purple-400">
-                📊 Series
+              <span className="px-2 py-0.5 bg-purple-900/30 border border-purple-700 rounded text-[10px] font-bold text-purple-400">
+                📊
               </span>
             )}
           </div>
         </div>
 
-        {/* Description */}
-        <DescriptionDropdown description={event.description} />
+        {/* Description - More compact */}
+        <div className="mb-3">
+          <DescriptionDropdown description={event.description} />
+        </div>
 
-        {/* Series Events (if applicable) */}
-        {isSeries && seriesData && seriesData.events && seriesData.events.length > 1 && (
-          <RelatedEventsDropdown 
-            seriesTitle={seriesData.title}
-            events={seriesData.events}
-            currentEventId={event.id}
-            hasDerivatives={seriesData.events.some(e => e.tags?.some(tag => tag.slug === "derivatives"))}
-          />
-        )}
+        {/* Series Events (if applicable) - Hide in embedded to save space */}
       </div>
 
       {/* Render based on event type */}

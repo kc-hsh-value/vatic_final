@@ -549,7 +549,7 @@ export default function AddressClient({
                   if (positionsTab === "active") {
                     const p = r as PolymarketActivePosition;
                     return (
-                      <div key={activeKey(p)} className="py-4 flex items-center gap-4">
+                      <Link target="_blank" key={activeKey(p)} href={`/event_test/${p.eventSlug}/${p.slug}`} className="py-4 flex items-center gap-4 hover:bg-zinc-900/30 transition-colors rounded-lg px-2 -mx-2">
                         <div className="h-10 w-10 rounded-xl overflow-hidden bg-zinc-800 border border-white/10 shrink-0">
                           {p.icon && <img src={p.icon} alt="" className="h-full w-full object-cover" />}
                         </div>
@@ -575,11 +575,11 @@ export default function AddressClient({
                           <div className="text-sm font-semibold text-zinc-200">{fmtMoney(p.currentValue)}</div>
                           <div className={cn("text-xs font-medium", p.cashPnl >= 0 ? "text-green-400" : "text-red-400")}>{fmtMoney(p.cashPnl)}</div>
                         </div>
-                      </div>
+                      </Link>
                     );
                   }
                   return (
-                    <div key={closedKey(r)} className="py-4 flex items-center gap-4">
+                    <Link key={closedKey(r)} href={`/event_test/${r.eventSlug}/${r.slug}`} className="py-4 flex items-center gap-4 hover:bg-zinc-900/30 transition-colors rounded-lg px-2 -mx-2">
                       <div className="h-10 w-10 rounded-xl overflow-hidden bg-zinc-800 border border-white/10 shrink-0">
                         {(r.icon || r.image) && <img src={r.icon || r.image} alt="" className="h-full w-full object-cover" />}
                       </div>
@@ -610,12 +610,12 @@ export default function AddressClient({
                         <div className={cn("text-xs font-medium", safeNum(r.realizedPnl)! >= 0 ? "text-green-400" : "text-red-400")}>{fmtMoney(safeNum(r.realizedPnl))}</div>
                         <div className="text-[11px] text-zinc-500">settled {(safeNum(r.curPrice)! * 100).toFixed(0)}¢</div>
                       </div>
-                    </div>
+                    </Link>
                   );
                 })
               ) : (
                 filteredActivity.map((a, idx) => (
-                  <div key={`${activityKey(a)}-${idx}`} className="py-4 flex items-center gap-4">
+                  <Link key={`${activityKey(a)}-${idx}`} href={a.eventSlug && a.slug ? `/event_test/${a.eventSlug}/${a.slug}` : '#'} className="py-4 flex items-center gap-4 hover:bg-zinc-900/30 transition-colors rounded-lg px-2 -mx-2">
                     <div className="h-10 w-10 rounded-xl overflow-hidden bg-zinc-800 border border-white/10 shrink-0">
                       {a.icon && <img src={a.icon} alt="" className="h-full w-full object-cover" />}
                     </div>
@@ -629,7 +629,7 @@ export default function AddressClient({
                     <div className="text-right">
                       <div className="text-sm font-semibold text-zinc-200">{a.usdcSize ? fmtMoney(a.usdcSize) : "—"}</div>
                     </div>
-                  </div>
+                  </Link>
                 ))
               )}
             </div>

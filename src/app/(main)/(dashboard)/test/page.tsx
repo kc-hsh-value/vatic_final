@@ -94,6 +94,13 @@ export default function FeedPage() {
   // Manage Sources Modal State
   const [manageOpen, setManageOpen] = useState(false);
 
+  // Layout size state for adjustable sections
+  const [layoutSize, setLayoutSize] = useState<"half" | "third">("half");
+
+  // Third column state and selection
+  const [thirdColumnView, setThirdColumnView] = useState<"empty" | "live-trades" | "recent-history" | "top-holders" | "market-view">("empty");
+  const [showThirdColumnPicker, setShowThirdColumnPicker] = useState(false);
+
   // Whale watching filter states - lifted to parent to allow TweetCard to update them
   // Structure to preserve event-market relationships and event IDs
   const [whaleFilters, setWhaleFilters] = useState<{
@@ -355,89 +362,221 @@ export default function FeedPage() {
       </div>
 
       {/* === DESKTOP LAYOUT: Side by Side === */}
-      <div className="hidden lg:flex lg:flex-row gap-6 lg:flex-1 lg:overflow-hidden">
+      <div className="hidden lg:flex lg:flex-col gap-6 lg:flex-1 lg:overflow-hidden">
         
-        {/* LEFT COLUMN: Alpha Feed */}
-        <div className="w-full lg:w-[60%] flex flex-col gap-6 lg:overflow-y-auto">
+        {/* Layout Controls */}
+        <div className="flex items-center justify-end gap-2 pb-2 border-b border-white/10">
+          <span className="text-xs text-muted-foreground mr-2">Layout:</span>
+          <Button
+            variant={layoutSize === "half" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setLayoutSize("half")}
+            className={layoutSize === "half" ? "bg-blue-600 hover:bg-blue-500" : "border-white/10"}
+          >
+            50/50
+          </Button>
+          <Button
+            variant={layoutSize === "third" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setLayoutSize("third")}
+            className={layoutSize === "third" ? "bg-blue-600 hover:bg-blue-500" : "border-white/10"}
+          >
+            33/33/33
+          </Button>
+        </div>
+
+        {/* Main Content Row */}
+        <div className="flex flex-row gap-6 flex-1 overflow-hidden">
           
-          {/* Header Area */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-                Alpha Feed <span className="text-xs font-mono font-normal text-green-400 bg-green-400/10 px-2 py-0.5 rounded border border-green-400/20">LIVE</span>
-              </h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                Real-time semantic correlations between X and Polymarket.
-              </p>
-            </div>
+          {/* LEFT COLUMN: Alpha Feed */}
+          <div 
+            className={`flex flex-col gap-6 overflow-y-auto ${
+              layoutSize === "half" ? "w-[50%]" : "w-[33.333%]"
+            }`}
+          >
             
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => loadFeed(true)} 
-                disabled={loading}
-                className="flex-1 sm:flex-none border-white/10 hover:bg-white/5"
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                Refresh
-              </Button>
+            {/* Header Area */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+                  Alpha Feed <span className="text-xs font-mono font-normal text-green-400 bg-green-400/10 px-2 py-0.5 rounded border border-green-400/20">LIVE</span>
+                </h1>
+                <p className="text-muted-foreground text-sm mt-1">
+                  Real-time semantic correlations between X and Polymarket.
+                </p>
+              </div>
               
-              <Button 
-                variant="secondary" 
-                size="sm" 
-                onClick={() => setManageOpen(true)}
-                className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-500 text-white border-none"
-              >
-                <Settings2 className="mr-2 h-4 w-4"/>
-                Sources
-              </Button>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => loadFeed(true)} 
+                  disabled={loading}
+                  className="flex-1 sm:flex-none border-white/10 hover:bg-white/5"
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                  Refresh
+                </Button>
+                
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => setManageOpen(true)}
+                  className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-500 text-white border-none"
+                >
+                  <Settings2 className="mr-2 h-4 w-4"/>
+                  Sources
+                </Button>
+              </div>
             </div>
+
+            {/* Tabs & Content */}
+            <Tabs defaultValue="global" onValueChange={(v: string) => setActiveTab(v as FeedFilter)} className="w-full">
+              <TabsList className="grid w-full sm:w-[400px] grid-cols-2 bg-black/40 border border-white/10 p-1">
+                <TabsTrigger value="global" className="data-[state=active]:bg-white/10">Global Feed</TabsTrigger>
+                <TabsTrigger value="following" className="data-[state=active]:bg-white/10">My Following</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="global" className="mt-6 space-y-4 min-h-[50vh]">
+                <FeedList items={items} loading={loading} onWatchWhales={watchWhalesForTweet} isBeingWatched={isBeingWatched} />
+              </TabsContent>
+              
+              <TabsContent value="following" className="mt-6 space-y-4 min-h-[50vh]">
+                {items.length === 0 && !loading ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-muted-foreground border border-dashed border-white/10 rounded-xl bg-white/5 gap-4">
+                    <p className="text-center">You are not following any accounts yet.</p>
+                    <Button onClick={() => setManageOpen(true)} variant="default">
+                      <TrendingUp className="mr-2 h-4 w-4" /> Add Accounts
+                    </Button>
+                  </div>
+                ) : (
+                  <FeedList items={items} loading={loading} onWatchWhales={watchWhalesForTweet} isBeingWatched={isBeingWatched} />
+                )}
+              </TabsContent>
+            </Tabs>
+
+            {/* Load More */}
+            {hasMore && items.length > 0 && (
+              <Button 
+                variant="ghost" 
+                className="self-center mt-4 w-full sm:w-auto text-white/50 hover:text-white" 
+                onClick={() => loadFeed(false)} 
+                disabled={loading}
+              >
+                {loading ? "Loading..." : "Load More Activity"}
+              </Button>
+            )}
           </div>
 
-          {/* Tabs & Content */}
-          <Tabs defaultValue="global" onValueChange={(v: string) => setActiveTab(v as FeedFilter)} className="w-full">
-            <TabsList className="grid w-full sm:w-[400px] grid-cols-2 bg-black/40 border border-white/10 p-1">
-              <TabsTrigger value="global" className="data-[state=active]:bg-white/10">Global Feed</TabsTrigger>
-              <TabsTrigger value="following" className="data-[state=active]:bg-white/10">My Following</TabsTrigger>
-            </TabsList>
+          {/* RIGHT COLUMN: Whale Watching */}
+          <div 
+            className={`h-full ${
+              layoutSize === "half" ? "w-[50%]" : "w-[33.333%]"
+            }`}
+          >
+            <WhaleWatching selectedEvents={whaleFilters.events} />
+          </div>
 
-            <TabsContent value="global" className="mt-6 space-y-4 min-h-[50vh]">
-              <FeedList items={items} loading={loading} onWatchWhales={watchWhalesForTweet} isBeingWatched={isBeingWatched} />
-            </TabsContent>
-            
-            <TabsContent value="following" className="mt-6 space-y-4 min-h-[50vh]">
-              {items.length === 0 && !loading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-muted-foreground border border-dashed border-white/10 rounded-xl bg-white/5 gap-4">
-                  <p className="text-center">You are not following any accounts yet.</p>
-                  <Button onClick={() => setManageOpen(true)} variant="default">
-                    <TrendingUp className="mr-2 h-4 w-4" /> Add Accounts
-                  </Button>
-                </div>
+          {/* THIRD COLUMN: Placeholder or selected view (only visible in third mode) */}
+          {layoutSize === "third" && (
+            <div className="w-[33.333%] h-full relative">
+              {thirdColumnView === "empty" ? (
+                <button
+                  onClick={() => setShowThirdColumnPicker(true)}
+                  className="w-full h-full border border-dashed border-white/20 rounded-xl bg-white/5 hover:bg-white/10 hover:border-white/30 transition-all flex flex-col items-center justify-center gap-4 cursor-pointer"
+                >
+                  <div className="w-16 h-16 rounded-full border-2 border-dashed border-white/30 flex items-center justify-center text-white/30 text-2xl group-hover:text-white/50 transition-colors">
+                    +
+                  </div>
+                  <p className="text-sm text-white/40">Add View</p>
+                </button>
               ) : (
-                <FeedList items={items} loading={loading} onWatchWhales={watchWhalesForTweet} isBeingWatched={isBeingWatched} />
+                <div className="w-full h-full flex flex-col">
+                  {/* Header with close button */}
+                  <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
+                    <h2 className="text-lg font-semibold text-white capitalize">
+                      {thirdColumnView.replace("-", " ")}
+                    </h2>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setThirdColumnView("empty")}
+                      className="h-8 w-8 p-0 text-white/50 hover:text-white"
+                    >
+                      ×
+                    </Button>
+                  </div>
+                  {/* Content based on selected view */}
+                  <div className="flex-1 overflow-hidden">
+                    <WhaleWatching 
+                      selectedEvents={whaleFilters.events} 
+                      defaultTab={thirdColumnView as "live-trades" | "recent-history" | "top-holders" | "market-view"}
+                    />
+                  </div>
+                </div>
               )}
-            </TabsContent>
-          </Tabs>
 
-          {/* Load More */}
-          {hasMore && items.length > 0 && (
-            <Button 
-              variant="ghost" 
-              className="self-center mt-4 w-full sm:w-auto text-white/50 hover:text-white" 
-              onClick={() => loadFeed(false)} 
-              disabled={loading}
-            >
-              {loading ? "Loading..." : "Load More Activity"}
-            </Button>
+              {/* Selection Modal */}
+              {showThirdColumnPicker && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-xl">
+                  <div className="bg-zinc-900 border border-white/20 rounded-lg p-6 w-[90%] max-w-sm shadow-2xl">
+                    <h3 className="text-lg font-semibold text-white mb-4">Select View</h3>
+                    <div className="space-y-2">
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start border-white/10 hover:bg-white/10"
+                        onClick={() => {
+                          setThirdColumnView("live-trades");
+                          setShowThirdColumnPicker(false);
+                        }}
+                      >
+                        Live Trades
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start border-white/10 hover:bg-white/10"
+                        onClick={() => {
+                          setThirdColumnView("recent-history");
+                          setShowThirdColumnPicker(false);
+                        }}
+                      >
+                        Recent History
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start border-white/10 hover:bg-white/10"
+                        onClick={() => {
+                          setThirdColumnView("top-holders");
+                          setShowThirdColumnPicker(false);
+                        }}
+                      >
+                        Top Holders
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start border-white/10 hover:bg-white/10"
+                        onClick={() => {
+                          setThirdColumnView("market-view");
+                          setShowThirdColumnPicker(false);
+                        }}
+                      >
+                        Market View
+                      </Button>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      className="w-full mt-4 text-white/50 hover:text-white"
+                      onClick={() => setShowThirdColumnPicker(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
+          
         </div>
-
-        {/* RIGHT COLUMN: Whale Watching */}
-        <div className="w-full lg:w-[40%] lg:h-full">
-          <WhaleWatching selectedEvents={whaleFilters.events} />
-        </div>
-        
       </div>
       
       {/* The Dialog */}
@@ -802,8 +941,7 @@ function SortableMarketItem({
       {/* Question Title with Price Changes */}
       <div className="flex-1 space-y-2">
         <Link 
-          href={`https://polymarket.com/event/${slug}/${market.market_slug}`}
-          target="_blank"
+          href={`/event_test/${slug}/${market.market_slug}`}
           className="text-sm text-white/90 font-medium leading-snug hover:text-blue-400 transition-colors block"
         >
           {market.question}

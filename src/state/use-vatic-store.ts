@@ -25,6 +25,14 @@ type SafeWallet = {
   lastSyncAt?: number;
 }
 
+type ClobCredentials = {
+  address?: string;
+  apiKey?: string;
+  secret?: string;
+  passphrase?: string;
+  lastSyncAt?: number;
+}
+
 type Auth = {
   ready: boolean;
   authenticated: boolean;
@@ -42,6 +50,7 @@ type VaticUserState = {
   provision: Provision;
   EOAWallet: EOAWallet;
   safeWallet?: SafeWallet;
+  clobCredentials?: ClobCredentials;
   status: { loading: boolean; error?: string };
   // actions
   initFromPrivy: (p: {
@@ -57,17 +66,19 @@ type VaticUserState = {
   setProvision: (p: Partial<Provision>) => void;
   setEOAWallet: (w: Partial<EOAWallet>) => void;
   setSafeWallet: (w: Partial<SafeWallet>) => void;
+  setClobCredentials: (c: Partial<ClobCredentials>) => void;
   setLoading: (loading: boolean) => void;
   setError: (error?: string) => void;
   reset: () => void;
 };
 
-const initialState: Omit<VaticUserState, "initFromPrivy" | "setProvision" | "setEOAWallet" | "setSafeWallet" | "setLoading" | "setError" | "reset"> = {
+const initialState: Omit<VaticUserState, "initFromPrivy" | "setProvision" | "setEOAWallet" | "setSafeWallet" | "setClobCredentials" | "setLoading" | "setError" | "reset"> = {
   auth: { ready: false, authenticated: false, userId: undefined },
   identity: { username: undefined, avatarUrl: undefined },
   provision: { signersAdded: false, hasAllowances: false, hasClobCreds: false, setupComplete: false, safeWalletDeployed: false },
   EOAWallet: { chainId: 137, address: undefined, walletId: undefined, lastSyncAt: undefined },
   safeWallet: {address:undefined, positionsValue: 0, balanceUSDC: 0, lockedUSDC: 0, lastSyncAt: 0},
+  clobCredentials: { address: undefined, apiKey: undefined, secret: undefined, passphrase: undefined, lastSyncAt: undefined },
   status: { loading: false, error: undefined },
 };
 
@@ -102,6 +113,7 @@ export const useVaticUserStore = create<VaticUserState>((set, get) => ({
   },
   setEOAWallet: (w) => set({ EOAWallet: { ...get().EOAWallet, ...w } }),
   setSafeWallet: (w) => set({ safeWallet: { ...get().safeWallet, ...w } }),
+  setClobCredentials: (c) => set({ clobCredentials: { ...get().clobCredentials, ...c } }),
   setLoading: (loading) => set({ status: { ...get().status, loading } }),
   setError: (error) => set({ status: { ...get().status, error } }),
   reset: () => set({ ...initialState }),

@@ -61,9 +61,11 @@ export interface WatchedEvent {
 }
 
 export function WhaleWatching({ 
-  selectedEvents = []
+  selectedEvents = [],
+  defaultTab = "market-view"
 }: { 
   selectedEvents?: WatchedEvent[];
+  defaultTab?: "live-trades" | "recent-history" | "top-holders" | "market-view";
 }) {
   console.log("selectedEvents:", selectedEvents);
   // --- State Management ---
@@ -71,7 +73,13 @@ export function WhaleWatching({
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [showFilters, setShowFilters] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<string>("live");
+  const [activeTab, setActiveTab] = useState<string>(
+    defaultTab === "live-trades" ? "live" : 
+    defaultTab === "recent-history" ? "history" :
+    defaultTab === "top-holders" ? "holders" :
+    defaultTab === "market-view" ? "market-view" :
+    "live"
+  );
   
   // History tab state (persisted across tab switches)
   const [historyTrades, setHistoryTrades] = useState<any[]>([]);
@@ -724,6 +732,19 @@ export function WhaleWatching({
             <Users className="h-4 w-4" />
             Top Holders
           </TabsTrigger>
+          <TabsTrigger 
+            value="market" 
+            className="gap-2" 
+            disabled={selectedEvents.length === 0}
+          >
+            <Eye className="h-4 w-4" />
+            Market View
+            {selectedEvents.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] rounded">
+                {selectedEvents.length}
+              </span>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         {/* Live Trades Tab */}
@@ -866,6 +887,69 @@ export function WhaleWatching({
               currentPage={holdersCurrentPage}
               setCurrentPage={setHoldersCurrentPage}
             />
+          </CardContent>
+        </TabsContent>
+
+        {/* Market View Tab - Embedded Event Viewer */}
+        <TabsContent value="market" className="flex-1 overflow-hidden m-0">
+          <CardContent className="h-full overflow-hidden p-0">
+            {selectedEvents.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                <Eye className="h-12 w-12 text-white/20 mb-4" />
+                <p className="text-white/40 text-sm">
+                  Select a market from the feed to view detailed orderbook
+                </p>
+              </div>
+            ) : (
+              <div className="h-full w-full overflow-hidden">
+                {/* Show tabs for multiple markets */}
+                {selectedEvents.length > 1 ? (
+                  <Tabs defaultValue={`${selectedEvents[0].eventSlug}-${selectedEvents[0].markets[0].marketSlug}-0-0`} className="h-full flex flex-col">
+                    <TabsList className="w-full justify-start border-b border-white/5 bg-transparent rounded-none h-10 px-2 flex-shrink-0 overflow-x-auto">
+                      {selectedEvents.flatMap((event: WatchedEvent, eventIdx) => 
+                        event.markets.map((market, marketIdx) => {
+                          const uniqueKey = `${event.eventSlug}-${market.marketSlug}-${eventIdx}-${marketIdx}`;
+                          return (
+                            <TabsTrigger 
+                              key={uniqueKey}
+                              value={uniqueKey}
+                              className="text-xs px-3 py-1 flex-shrink-0"
+                            >
+                              {market.marketSlug.slice(0, 20)}...
+                            </TabsTrigger>
+                          );
+                        })
+                      )}
+                    </TabsList>
+                    {selectedEvents.flatMap((event: WatchedEvent, eventIdx) =>
+                      event.markets.map((market, marketIdx) => {
+                        const uniqueKey = `${event.eventSlug}-${market.marketSlug}-${eventIdx}-${marketIdx}`;
+                        return (
+                          <TabsContent 
+                            key={uniqueKey}
+                            value={uniqueKey}
+                            className="flex-1 m-0 overflow-hidden"
+                          >
+                            <iframe
+                              src={`/event_embedded/${event.eventSlug}/${market.marketSlug}`}
+                              className="w-full h-full border-0"
+                              title={`Market: ${market.marketSlug}`}
+                            />
+                          </TabsContent>
+                        );
+                      })
+                    )}
+                  </Tabs>
+                ) : (
+                  /* Single market - show directly */
+                  <iframe
+                    src={`/event_embedded/${selectedEvents[0].eventSlug}/${selectedEvents[0].markets[0].marketSlug}`}
+                    className="w-full h-full border-0"
+                    title={`Market: ${selectedEvents[0].markets[0].marketSlug}`}
+                  />
+                )}
+              </div>
+            )}
           </CardContent>
         </TabsContent>
       </Tabs>
